@@ -1,0 +1,10 @@
+{
+  "name": "obra-cockpit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cockpit da obra — um time de agentes (engenheiro→QA→revisor→PR) que trabalha nos seus projetos, com painel no navegador e chat do Boss.",
+  "scripts": {
+    "cockpit": "node scripts/obra-cockpit.mjs"
+  }
+}
