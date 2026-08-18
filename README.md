@@ -11,6 +11,8 @@ chat do Boss e um mapa de onde o dinheiro queimou.
 
 </div>
 
+![O cockpit da obra](docs/img/cockpit.png)
+
 ---
 
 ## O que é
@@ -88,6 +90,8 @@ flowchart LR
 - **Acionar time** — você escreve o objetivo, escolhe o projeto e o time (Caprichado/Rápido).
 - **💬 Boss** — um Claude com **sessão dedicada** (o contexto cresce e persiste) que conhece o
   projeto pela memória. Dúvida ele responde; tarefa de código ele **despacha sozinho**.
+
+![Chat do Boss](docs/img/chat.png)
 
 ---
 
