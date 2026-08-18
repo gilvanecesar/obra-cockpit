@@ -780,6 +780,7 @@ async function enviarBoss(){
 }
 document.getElementById("chatEnviar").onclick=enviarBoss;
 document.getElementById("chatobj").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); enviarBoss(); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ chat.classList.remove("on"); modal.classList.remove("on"); } });
 
 // heatmap "onde o dinheiro queimou": dia (linha) × hora (coluna), cor pela intensidade
 const CORGASTO=["#111a26","#3a4657","#e8b339","#eb6e6e"]; // sem gasto · baixo · médio · alto
