@@ -100,8 +100,9 @@ Adicionar projeto: botão **+ Novo** no cockpit — repo git que já existe OU c
 | `POST /missao` | Dispara missão `{objetivo, projeto, time, forcar}`. 409 = conflito da trava. |
 | `GET /projetos/candidatos` | Repos git em `~/Documents/DEV` ainda não registrados. |
 | `POST /projetos` | Registra projeto (existente ou cria do zero). |
-| `POST /boss/chat` | Manda mensagem ao Boss `{mensagem}` → resposta (+ despacho se for código). |
+| `POST /boss/chat` | Manda mensagem ao Boss `{mensagem, anexos}` → resposta (+ despacho se for código). |
 | `GET /boss/historico` | Mensagens do chat do Boss. |
+| `POST /boss/anexo` | Sobe um arquivo (base64, teto 4MB) pro chat do Boss; devolve `{caminho, nome}`. |
 
 **Só escuta em `127.0.0.1`** — o cockpit dispara processo e não tem login; não pode ouvir a rede.
 
@@ -115,7 +116,8 @@ Adicionar projeto: botão **+ Novo** no cockpit — repo git que já existe OU c
 | `.herdr-obra-status.json` | Legado: onde caía missão lançada sem `OBRA_STATUS` (ainda lido). |
 | `.herdr-obra-missoes.json` | Histórico das missões encerradas (últimas 40). |
 | `.herdr-obra-projetos.json` | Projetos adicionados pelo dono. |
-| `.herdr-obra-boss.json` | `{sessionId, mensagens}` do chat do Boss. |
+| `.herdr-obra-boss.json` | `{sessionId, mensagens}` do chat do Boss (mensagens carregam `anexos: [{nome,caminho}]`). |
+| `.herdr-obra-anexos/` | Arquivos que o dono anexou no chat do Boss (nome saneado + prefixo `randomUUID()`). |
 | `.herdr-obra.json` | Quadro de tarefas (kanban, fluxo antigo). |
 
 ---
