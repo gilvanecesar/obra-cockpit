@@ -21,6 +21,7 @@ import { spawn, execFileSync, execFile } from "child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } from "fs";
 import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { randomUUID } from "crypto";
 import { lerAtividade } from "./obra-stream.mjs";
 import {
   projetosDisponiveis, acharProjeto, conflitoDeProjeto,
@@ -302,9 +303,36 @@ function novoProjeto({ modo, nome, dir, palavras }) {
 // ================== CHAT DO BOSS (um Claude no navegador) ==================
 // Sessão DEDICADA: o contexto cresce sozinho (resume a mesma sessão) e conhece o projeto
 // pela memória/CLAUDE.md — sem se misturar com a conversa do terminal.
-const BOSS = resolve(RAIZ, ".herdr-obra-boss.json"); // { sessionId, mensagens: [{de,texto,em}] }
+const BOSS = resolve(RAIZ, ".herdr-obra-boss.json"); // { sessionId, mensagens: [{de,texto,anexos,em}] }
 const lerBoss = () => { try { return JSON.parse(readFileSync(BOSS, "utf8")); } catch { return { sessionId: null, mensagens: [] }; } };
 const salvarBoss = (b) => writeFileSync(BOSS, JSON.stringify(b, null, 2));
+
+// Arquivos que o dono anexa no chat do Boss. Ficam FORA do worktree de qualquer missão (isto
+// aqui é a raiz do cockpit, não um projeto-alvo) — mas ainda assim gitignorados (.herdr-obra*),
+// igual a todo outro arquivo de runtime.
+const ANEXOS = resolve(RAIZ, ".herdr-obra-anexos");
+try { mkdirSync(ANEXOS, { recursive: true }); } catch {}
+const TETO_ANEXO = 4 * 1024 * 1024; // 4MB por arquivo — chat, não repositório de mídia
+
+/** Nome de arquivo sem caminho e sem caractere que preste pra path traversal. */
+function nomeSeguro(nome) {
+  const base = String(nome || "arquivo").split(/[\\/]/).pop();
+  const limpo = base.replace(/[^\w.\-() ]/g, "_").slice(0, 120).trim();
+  return limpo || "arquivo";
+}
+
+/** Salva um anexo do chat (base64) em disco e devolve o caminho absoluto — nunca o conteúdo. */
+function salvarAnexo({ nome, dados }) {
+  if (!dados) throw new Error("arquivo vazio");
+  let buf;
+  try { buf = Buffer.from(String(dados), "base64"); } catch { throw new Error("arquivo inválido"); }
+  if (!buf.length) throw new Error("arquivo vazio");
+  if (buf.length > TETO_ANEXO) throw new Error("arquivo passa de 4MB");
+  const limpo = nomeSeguro(nome);
+  const caminho = join(ANEXOS, `${randomUUID()}-${limpo}`);
+  writeFileSync(caminho, buf);
+  return { caminho, nome: limpo, tamanho: buf.length };
+}
 
 const BOSS_PROMPT = [
   "Você é o BOSS da obra do Gilvane (dono do QueroFretes/TMS), falando com ele no chat do cockpit.",
@@ -316,6 +344,8 @@ const BOSS_PROMPT = [
   "  com um marcador em UMA linha: [MISSAO: <slug-do-projeto> | <objetivo claro e completo>].",
   "- Dúvida, conversa, arquitetura, algo rápido → responda você mesmo, curto, sem marcador.",
   "Antes do marcador, escreva 1-2 linhas dizendo o que vai despachar e pra qual projeto.",
+  "Quando a mensagem trouxer 'Arquivos anexados pelo dono', são caminhos locais no disco —",
+  "leia com Read se o conteúdo importar para a resposta ou para o objetivo que vai despachar.",
   "Seja conciso e direto, em português do Brasil. Não invente número nem promessa.",
 ].join("\n");
 
@@ -346,14 +376,24 @@ function rodarBoss(mensagem, sessionId) {
 }
 
 /** Uma mensagem do dono → resposta do Boss (+ despacho se ele decidir que é obra). */
-async function bossChat(mensagem) {
+async function bossChat(mensagem, anexos) {
   const msg = String(mensagem || "").trim();
-  if (!msg) throw new Error("escreva a mensagem");
+  // Só aceita anexo que a GENTE salvou em /boss/anexo (caminho dentro de ANEXOS) — senão a
+  // mensagem viraria uma porta para mandar o Boss (que tem Read) ler qualquer arquivo do disco.
+  const validos = (Array.isArray(anexos) ? anexos : []).slice(0, 5)
+    .filter((a) => a && typeof a.caminho === "string" && typeof a.nome === "string")
+    .map((a) => ({ nome: a.nome, caminho: resolve(a.caminho) }))
+    .filter((a) => a.caminho.startsWith(ANEXOS + "/") && existsSync(a.caminho));
+  if (!msg && !validos.length) throw new Error("escreva a mensagem ou anexe um arquivo");
   if (msg.length > 4000) throw new Error("mensagem grande demais");
   const b = lerBoss();
-  b.mensagens.push({ de: "voce", texto: msg, em: new Date().toISOString() });
+  b.mensagens.push({ de: "voce", texto: msg, anexos: validos, em: new Date().toISOString() });
 
-  const r = await rodarBoss(msg, b.sessionId);
+  const paraBoss = msg + (validos.length
+    ? (msg ? "\n\n" : "") + "Arquivos anexados pelo dono:\n" +
+      validos.map((a) => `- ${a.nome}: ${a.caminho}`).join("\n")
+    : "");
+  const r = await rodarBoss(paraBoss, b.sessionId);
   if (r.sessionId) b.sessionId = r.sessionId; // fixa a sessão dedicada na 1ª resposta
 
   // O Boss decidiu despachar? [MISSAO: slug | objetivo]
@@ -429,7 +469,16 @@ h1 b{color:var(--verde)}
 .msg.boss{align-self:flex-start;background:#12202f;border:1px solid #23384d;color:var(--gelo)}
 .msg.pensando{align-self:flex-start;color:#6d8299;font-style:italic}
 .chatvazio{color:#6d8299;text-align:center;margin:auto;font-size:12px;padding:20px;line-height:1.7}
+.anexos{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.anexo{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--gelo);
+ border:1px solid #23384d;background:#0b1420;padding:3px 8px}
+.chatanexos{display:none;flex-wrap:wrap;gap:6px;padding:0 12px 10px}
+.chatanexos .anexo{color:var(--ciano);border-color:var(--linha)}
+.chatanexos .anexo b{cursor:pointer;color:var(--verm);font-weight:700}
 .chatentrada{border-top:1px solid var(--linha);padding:12px;display:flex;gap:8px}
+#chatAnexar{background:transparent;border:1px solid var(--linha);color:#8ba4bb;cursor:pointer;
+ font-size:15px;padding:0 12px;align-self:stretch}
+#chatAnexar:hover{border-color:var(--ambar);color:var(--ambar)}
 .chatentrada textarea{flex:1;min-height:44px;max-height:140px;resize:vertical;background:#0b1420;
  border:1px solid var(--linha);color:var(--gelo);padding:10px 12px;
  font:300 13px/1.7 "JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace}
@@ -553,7 +602,10 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
   <div class="chatcab">💬 BOSS <span class="chatsub">sessão dedicada · conhece o projeto</span>
     <button id="chatFechar" title="Fechar">✕</button></div>
   <div class="chatmsgs" id="chatmsgs"></div>
+  <div class="chatanexos" id="chatAnexos"></div>
   <div class="chatentrada">
+    <input type="file" id="chatArquivo" multiple style="display:none">
+    <button id="chatAnexar" title="Anexar arquivo">📎</button>
     <textarea id="chatobj" maxlength="4000" placeholder="Fala com o Boss… (ele responde ou despacha pra obra)"></textarea>
     <button id="chatEnviar">Enviar</button>
   </div>
@@ -753,10 +805,14 @@ function render(d){
 
 // ---- chat do Boss ----
 const chat=document.getElementById("chat");
+function chipsAnexos(anexos){
+  if(!anexos||!anexos.length) return "";
+  return '<div class="anexos">'+anexos.map(a=>'<span class="anexo">📎 '+esc(a.nome)+'</span>').join("")+'</div>';
+}
 function pintarChat(msgs){
   const box=document.getElementById("chatmsgs");
   if(!msgs||!msgs.length){ box.innerHTML='<div class="chatvazio">Fala com o Boss. Ele responde na hora, e quando for código ele despacha pra obra sozinho.</div>'; return; }
-  box.innerHTML=msgs.map(m=>'<div class="msg '+(m.de==="voce"?"voce":"boss")+'">'+esc(m.texto)+'</div>').join("");
+  box.innerHTML=msgs.map(m=>'<div class="msg '+(m.de==="voce"?"voce":"boss")+'">'+(m.texto?esc(m.texto):"")+chipsAnexos(m.anexos)+'</div>').join("");
   box.scrollTop=box.scrollHeight;
 }
 async function abrirChat(){
@@ -766,15 +822,51 @@ async function abrirChat(){
 }
 document.getElementById("btBoss").onclick=abrirChat;
 document.getElementById("chatFechar").onclick=()=>chat.classList.remove("on");
+
+// ---- anexos do chat: escolhe → sobe pro servidor na hora → some da lista quando a mensagem sai ----
+let anexosPendentes=[];
+function pintarAnexosPendentes(){
+  const box=document.getElementById("chatAnexos");
+  if(!anexosPendentes.length){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display="flex";
+  box.innerHTML=anexosPendentes.map((a,i)=>'<span class="anexo">📎 '+esc(a.nome)+' <b data-i="'+i+'" title="remover">✕</b></span>').join("");
+  box.querySelectorAll("b").forEach(b=>b.onclick=()=>{ anexosPendentes.splice(+b.dataset.i,1); pintarAnexosPendentes(); });
+}
+function lerComoBase64(arquivo){
+  return new Promise((ok,erro)=>{
+    const r=new FileReader();
+    r.onload=()=>ok(String(r.result).split(",").pop());
+    r.onerror=erro;
+    r.readAsDataURL(arquivo);
+  });
+}
+document.getElementById("chatAnexar").onclick=()=>document.getElementById("chatArquivo").click();
+document.getElementById("chatArquivo").addEventListener("change",async e=>{
+  const arquivos=[...e.target.files]; e.target.value="";
+  for(const f of arquivos){
+    if(f.size>4*1024*1024){ alert('"'+f.name+'" passa de 4MB — não anexado'); continue; }
+    try{
+      const dados=await lerComoBase64(f);
+      const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:f.name,dados})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){ alert(j.erro||('não deu para anexar "'+f.name+'"')); continue; }
+      anexosPendentes.push({nome:j.nome,caminho:j.caminho});
+    }catch{ alert('erro ao anexar "'+f.name+'"'); }
+  }
+  pintarAnexosPendentes();
+});
+
 async function enviarBoss(){
   const inp=document.getElementById("chatobj"), bt=document.getElementById("chatEnviar");
-  const msg=inp.value.trim(); if(!msg) return;
+  const msg=inp.value.trim();
+  if(!msg&&!anexosPendentes.length) return;
+  const anexos=anexosPendentes;
   const box=document.getElementById("chatmsgs");
   // pinta a sua msg + "pensando" na hora (a resposta demora alguns segundos)
-  box.insertAdjacentHTML("beforeend",'<div class="msg voce">'+esc(msg)+'</div><div class="msg pensando" id="pensando">Boss pensando…</div>');
-  box.scrollTop=box.scrollHeight; inp.value=""; bt.disabled=true;
+  box.insertAdjacentHTML("beforeend",'<div class="msg voce">'+(msg?esc(msg):"")+chipsAnexos(anexos)+'</div><div class="msg pensando" id="pensando">Boss pensando…</div>');
+  box.scrollTop=box.scrollHeight; inp.value=""; anexosPendentes=[]; pintarAnexosPendentes(); bt.disabled=true;
   try{
-    const r=await fetch("/boss/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mensagem:msg})});
+    const r=await fetch("/boss/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mensagem:msg,anexos})});
     const j=await r.json().catch(()=>({}));
     document.getElementById("pensando")?.remove();
     box.insertAdjacentHTML("beforeend",'<div class="msg boss">'+esc(j.resposta||j.erro||"(sem resposta)")+'</div>');
@@ -857,7 +949,12 @@ createServer(async (req, res) => {
   if (req.url === "/projetos/candidatos") return json(200, { candidatos: reposCandidatos() });
   if (req.url === "/boss/historico") return json(200, { mensagens: lerBoss().mensagens.slice(-60) });
   if (req.method === "POST" && req.url === "/boss/chat") {
-    try { return json(200, await bossChat((await lerCorpo(req, 8192)).mensagem)); }
+    try { const c = await lerCorpo(req, 8192); return json(200, await bossChat(c.mensagem, c.anexos)); }
+    catch (e) { return json(400, { erro: e.message }); }
+  }
+  if (req.method === "POST" && req.url === "/boss/anexo") {
+    // teto maior que o padrão: é base64 de arquivo, não texto de formulário.
+    try { return json(201, salvarAnexo(await lerCorpo(req, 6 * 1024 * 1024))); }
     catch (e) { return json(400, { erro: e.message }); }
   }
   if (req.method === "POST" && req.url === "/projetos") {
