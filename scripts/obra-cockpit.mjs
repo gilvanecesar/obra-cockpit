@@ -455,18 +455,20 @@ h1 b{color:var(--verde)}
 /* chat do Boss — gaveta lateral */
 .chat{position:fixed;top:0;right:0;width:min(420px,92vw);height:100vh;background:var(--painel);
  border-left:1px solid var(--ambar);display:flex;flex-direction:column;transform:translateX(100%);
- transition:transform .18s;z-index:20}
+ transition:transform .18s;z-index:20;
+ font-family:"JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
+ font-weight:300}
 .chat.on{transform:translateX(0)}
 .chatcab{padding:14px 16px;border-bottom:1px solid var(--linha);font-size:12px;letter-spacing:.14em;
- color:var(--ambar);font-weight:700;display:flex;align-items:center;gap:10px}
-.chatsub{font-size:10px;letter-spacing:.06em;color:#6d8299;font-weight:400;text-transform:none}
+ color:var(--ambar);font-weight:600;display:flex;align-items:center;gap:10px}
+.chatsub{font-size:10px;letter-spacing:.06em;color:#6d8299;font-weight:300;text-transform:none}
 .chatcab button{margin-left:auto;background:transparent;border:0;color:#6d8299;cursor:pointer;font-size:16px}
-.chatmsgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
-.msg{max-width:88%;padding:9px 12px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.chatmsgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:18px}
+.msg{max-width:88%;padding:12px 14px;font-size:13px;font-weight:300;line-height:1.85;white-space:pre-wrap;word-break:break-word}
 .msg.voce{align-self:flex-end;background:#0e2233;border:1px solid var(--linha);color:var(--gelo)}
 .msg.boss{align-self:flex-start;background:#12202f;border:1px solid #23384d;color:var(--gelo)}
 .msg.pensando{align-self:flex-start;color:#6d8299;font-style:italic}
-.chatvazio{color:#6d8299;text-align:center;margin:auto;font-size:12px;padding:20px}
+.chatvazio{color:#6d8299;text-align:center;margin:auto;font-size:12px;padding:20px;line-height:1.7}
 .anexos{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
 .anexo{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--gelo);
  border:1px solid #23384d;background:#0b1420;padding:3px 8px}
@@ -478,10 +480,12 @@ h1 b{color:var(--verde)}
  font-size:15px;padding:0 12px;align-self:stretch}
 #chatAnexar:hover{border-color:var(--ambar);color:var(--ambar)}
 .chatentrada textarea{flex:1;min-height:44px;max-height:140px;resize:vertical;background:#0b1420;
- border:1px solid var(--linha);color:var(--gelo);padding:9px 11px;font:13px/1.4 "SF Mono",Menlo,monospace}
+ border:1px solid var(--linha);color:var(--gelo);padding:10px 12px;
+ font:300 13px/1.7 "JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace}
 .chatentrada textarea:focus{outline:none;border-color:var(--ambar)}
 .chatentrada button{background:transparent;border:1px solid var(--ambar);color:var(--ambar);padding:0 16px;
- cursor:pointer;font:11px/1 "SF Mono",monospace;letter-spacing:.1em;text-transform:uppercase}
+ cursor:pointer;font:300 11px/1 "JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
+ letter-spacing:.1em;text-transform:uppercase}
 .chatentrada button:hover:not(:disabled){background:var(--ambar);color:var(--marinho)}
 .chatentrada button:disabled{opacity:.4;cursor:default}
 
