@@ -718,6 +718,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 </header>
 <div class="chat" id="chat">
   <div class="chatcab">💬 BOSS <span class="chatsub" id="chatProj">sessão dedicada · conhece o projeto</span>
+    <button id="chatJanela" title="Abrir em janela inteira (outra aba)" onclick="window.open('/chat','_blank')">⛶</button>
     <button id="chatFechar" title="Fechar">✕</button></div>
   <div class="chatmsgs" id="chatmsgs"></div>
   <div class="chatanexos" id="chatAnexos"></div>
@@ -1085,6 +1086,82 @@ conectarSSE();
 setInterval(()=>{ if(Date.now()-ultimoUpdate>=4000) puxar(); },2000); // cão-de-guarda: SSE mudo → poll
 </script></body></html>`;
 
+/**
+ * Chat do Boss em PÁGINA INTEIRA (rota GET /chat) — pra abrir numa aba própria, janela cheia.
+ * Reusa os MESMOS endpoints do servidor (/boss/historico, /boss/chat, /boss/anexo) — só a tela
+ * é nova, então não há lógica de Boss duplicada. É o chefe-dos-chefes (roteia por projeto pelo
+ * que você disser; sem abas aqui, não manda dica).
+ */
+const CHAT_PAGE = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Boss · Chat</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:${MARINHO};color:${GELO};font:14px/1.5 "SF Mono",Menlo,ui-monospace,monospace;height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid #16283c;color:${AMBAR};font-weight:700;letter-spacing:.14em}
+header .sub{font-size:11px;letter-spacing:.04em;color:#6d8299;font-weight:400}
+#msgs{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px;max-width:900px;width:100%;margin:0 auto}
+.msg{max-width:80%;padding:10px 13px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.msg.voce{align-self:flex-end;background:#0e2233;border:1px solid #16283c}
+.msg.boss{align-self:flex-start;background:#12202f;border:1px solid #23384d}
+.msg.pensando{align-self:flex-start;color:#6d8299;font-style:italic}
+.vazio{color:#6d8299;text-align:center;margin:auto}
+.anx{display:flex;flex-wrap:wrap;gap:6px;padding:0 20px;max-width:900px;width:100%;margin:0 auto}
+.anx span{font-size:11px;color:#8ba4bb;border:1px solid #16283c;padding:2px 8px}
+.entrada{border-top:1px solid #16283c;padding:14px 18px;display:flex;gap:8px;max-width:900px;width:100%;margin:0 auto}
+.entrada textarea{flex:1;min-height:48px;max-height:180px;resize:vertical;background:#0b1420;border:1px solid #16283c;color:${GELO};padding:10px 12px;font:14px/1.4 "SF Mono",Menlo,monospace}
+.entrada textarea:focus{outline:none;border-color:${AMBAR}}
+.entrada button{background:transparent;border:1px solid #16283c;color:#8ba4bb;padding:0 14px;cursor:pointer;font:13px "SF Mono",monospace}
+.entrada .env{border-color:${AMBAR};color:${AMBAR};letter-spacing:.1em;text-transform:uppercase;font-size:11px}
+.entrada .env:hover:not(:disabled){background:${AMBAR};color:${MARINHO}}
+.entrada button:disabled{opacity:.4;cursor:default}
+</style></head><body>
+<header>💬 BOSS <span class="sub">chefe-dos-chefes · conhece todos os projetos · janela inteira</span></header>
+<div id="msgs"></div>
+<div class="anx" id="anx"></div>
+<div class="entrada">
+  <input type="file" id="arq" multiple style="display:none">
+  <button id="anexar" title="Anexar">📎</button>
+  <textarea id="obj" maxlength="4000" placeholder="Fala com o Boss… (ele responde ou despacha pra obra)"></textarea>
+  <button class="env" id="enviar">Enviar</button>
+</div>
+<script>
+const esc=s=>String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const chips=a=>(!a||!a.length)?"":'<div style="margin-top:6px;opacity:.8">'+a.map(x=>"📎 "+esc(x.nome)).join("  ")+'</div>';
+const box=document.getElementById("msgs");
+function pintar(ms){
+  if(!ms||!ms.length){ box.innerHTML='<div class="vazio">Fala com o Boss. Ele responde na hora, e quando for código ele despacha pra obra.</div>'; return; }
+  box.innerHTML=ms.map(m=>'<div class="msg '+(m.de==="voce"?"voce":"boss")+'">'+(m.texto?esc(m.texto):"")+chips(m.anexos)+'</div>').join("");
+  box.scrollTop=box.scrollHeight;
+}
+fetch("/boss/historico").then(r=>r.json()).then(j=>pintar(j.mensagens)).catch(()=>{});
+let pend=[];
+function pintarPend(){ const b=document.getElementById("anx"); b.innerHTML=pend.map((a,i)=>'<span>📎 '+esc(a.nome)+' <b data-i="'+i+'" style="cursor:pointer">✕</b></span>').join(""); b.querySelectorAll("b").forEach(x=>x.onclick=()=>{pend.splice(+x.dataset.i,1);pintarPend();}); }
+const b64=f=>new Promise((ok,e)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",").pop());r.onerror=e;r.readAsDataURL(f);});
+document.getElementById("anexar").onclick=()=>document.getElementById("arq").click();
+document.getElementById("arq").addEventListener("change",async e=>{
+  for(const f of [...e.target.files]){ e.target.value="";
+    if(f.size>4*1024*1024){ alert('"'+f.name+'" passa de 4MB'); continue; }
+    try{ const dados=await b64(f); const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:f.name,dados})}); const j=await r.json(); if(!r.ok){alert(j.erro||"não deu");continue;} pend.push({nome:j.nome,caminho:j.caminho}); }catch{ alert("erro ao anexar"); }
+  }
+  pintarPend();
+});
+async function enviar(){
+  const inp=document.getElementById("obj"), bt=document.getElementById("enviar");
+  const msg=inp.value.trim(); if(!msg&&!pend.length) return;
+  const anexos=pend;
+  box.insertAdjacentHTML("beforeend",'<div class="msg voce">'+(msg?esc(msg):"")+chips(anexos)+'</div><div class="msg pensando" id="p">Boss pensando…</div>');
+  box.scrollTop=box.scrollHeight; inp.value=""; pend=[]; pintarPend(); bt.disabled=true;
+  try{ const r=await fetch("/boss/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mensagem:msg,anexos})}); const j=await r.json().catch(()=>({}));
+    document.getElementById("p")?.remove();
+    box.insertAdjacentHTML("beforeend",'<div class="msg boss">'+esc(j.resposta||j.erro||"(sem resposta)")+'</div>'); box.scrollTop=box.scrollHeight;
+  }catch{ document.getElementById("p")?.remove(); box.insertAdjacentHTML("beforeend",'<div class="msg boss">(erro ao falar com o Boss)</div>'); }
+  bt.disabled=false; inp.focus();
+}
+document.getElementById("enviar").onclick=enviar;
+document.getElementById("obj").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); enviar(); } });
+document.getElementById("obj").focus();
+</script></body></html>`;
+
 createServer(async (req, res) => {
   const json = (c, o) => { res.writeHead(c, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(o)); };
   if (req.method === "POST" && req.url === "/missao") {
@@ -1123,6 +1200,10 @@ createServer(async (req, res) => {
     const timer = setInterval(enviar, 1000);
     req.on("close", () => clearInterval(timer));
     return;
+  }
+  if (req.url === "/chat") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    return res.end(CHAT_PAGE); // chat do Boss em página inteira (aba própria)
   }
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   res.end(PAGINA);
