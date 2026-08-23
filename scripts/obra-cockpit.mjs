@@ -510,37 +510,17 @@ function lerCorpo(req, limite = 8 * 1024) {
   });
 }
 
-const PAGINA = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Cockpit · Obra</title>
-<style>
+// ---- pedaços de HTML/CSS/JS do CHAT DO BOSS, reaproveitados tanto na gaveta da página
+// principal quanto na janela standalone (GET /boss) — uma fonte só, sem duplicar lógica.
+const ESTILO_BASE = `
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--marinho:${MARINHO};--ciano:${CIANO};--verde:${VERDE};--gelo:${GELO};--ambar:${AMBAR};--verm:${VERM};--linha:#16283c;--painel:#0b1420}
 body{background:var(--marinho);color:var(--gelo);font:14px/1.5 "SF Mono",Menlo,ui-monospace,monospace;min-height:100vh;
  background-image:linear-gradient(rgba(53,193,239,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(53,193,239,.045) 1px,transparent 1px);
  background-size:46px 46px}
-header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
-h1{font-size:15px;letter-spacing:.28em;color:var(--ciano);font-weight:700}
-h1 b{color:var(--verde)}
-.abas{display:flex;gap:6px}
-.aba{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#6d8299;padding:6px 12px;border:1px solid var(--linha);
- background:transparent;cursor:pointer;font-family:inherit}
-.aba.on{color:var(--marinho);background:var(--ciano);border-color:var(--ciano);font-weight:700}
-.aba.mais{color:var(--verde);border-style:dashed}
-.aba.mais:hover{background:var(--verde);color:var(--marinho)}
-.aba.boss{color:var(--ambar);border-color:var(--ambar)}
-.aba.boss:hover{background:var(--ambar);color:var(--marinho)}
-#conta{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:11px;color:#6d8299;white-space:nowrap}
-#conta b{font-weight:700}
-#conta .plano{color:var(--ciano);letter-spacing:.06em}
-#relogio{font-size:11px;color:#6d8299}
+`;
 
-/* chat do Boss — gaveta lateral */
-.chat{position:fixed;top:0;right:0;width:min(420px,92vw);height:100vh;background:var(--painel);
- border-left:1px solid var(--ambar);display:flex;flex-direction:column;transform:translateX(100%);
- transition:transform .18s;z-index:20;
- font-family:"JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
- font-weight:300}
-.chat.on{transform:translateX(0)}
+const CHAT_CSS = `
 .chatcab{padding:14px 16px;border-bottom:1px solid var(--linha);font-size:12px;letter-spacing:.14em;
  color:var(--ambar);font-weight:600;display:flex;align-items:center;gap:10px}
 .chatsub{font-size:10px;letter-spacing:.06em;color:#6d8299;font-weight:300;text-transform:none}
@@ -570,6 +550,104 @@ h1 b{color:var(--verde)}
  letter-spacing:.1em;text-transform:uppercase}
 .chatentrada button:hover:not(:disabled){background:var(--ambar);color:var(--marinho)}
 .chatentrada button:disabled{opacity:.4;cursor:default}
+`;
+
+// Funções do chat: pintar mensagens/anexos e falar com /boss/chat, /boss/anexo, /boss/historico —
+// os únicos endpoints que o chat usa. Espera um `projeto` já declarado no escopo (dica de
+// roteamento; null na janela standalone). Uma fonte só, usada tanto na gaveta quanto na janela própria.
+const CHAT_JS = `
+function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
+function chipsAnexos(anexos){
+  if(!anexos||!anexos.length) return "";
+  return '<div class="anexos">'+anexos.map(a=>'<span class="anexo">📎 '+esc(a.nome)+'</span>').join("")+'</div>';
+}
+function pintarChat(msgs){
+  const box=document.getElementById("chatmsgs");
+  if(!msgs||!msgs.length){ box.innerHTML='<div class="chatvazio">Fala com o Boss. Ele responde na hora, e quando for código ele despacha pra obra sozinho.</div>'; return; }
+  box.innerHTML=msgs.map(m=>'<div class="msg '+(m.de==="voce"?"voce":"boss")+'">'+(m.texto?esc(m.texto):"")+chipsAnexos(m.anexos)+'</div>').join("");
+  box.scrollTop=box.scrollHeight;
+}
+let anexosPendentes=[];
+function pintarAnexosPendentes(){
+  const box=document.getElementById("chatAnexos");
+  if(!anexosPendentes.length){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display="flex";
+  box.innerHTML=anexosPendentes.map((a,i)=>'<span class="anexo">📎 '+esc(a.nome)+' <b data-i="'+i+'" title="remover">✕</b></span>').join("");
+  box.querySelectorAll("b").forEach(b=>b.onclick=()=>{ anexosPendentes.splice(+b.dataset.i,1); pintarAnexosPendentes(); });
+}
+function lerComoBase64(arquivo){
+  return new Promise((ok,erro)=>{
+    const r=new FileReader();
+    r.onload=()=>ok(String(r.result).split(",").pop());
+    r.onerror=erro;
+    r.readAsDataURL(arquivo);
+  });
+}
+document.getElementById("chatAnexar").onclick=()=>document.getElementById("chatArquivo").click();
+document.getElementById("chatArquivo").addEventListener("change",async e=>{
+  const arquivos=[...e.target.files]; e.target.value="";
+  for(const f of arquivos){
+    if(f.size>4*1024*1024){ alert('"'+f.name+'" passa de 4MB — não anexado'); continue; }
+    try{
+      const dados=await lerComoBase64(f);
+      const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:f.name,dados})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){ alert(j.erro||('não deu para anexar "'+f.name+'"')); continue; }
+      anexosPendentes.push({nome:j.nome,caminho:j.caminho});
+    }catch{ alert('erro ao anexar "'+f.name+'"'); }
+  }
+  pintarAnexosPendentes();
+});
+async function enviarBoss(){
+  const inp=document.getElementById("chatobj"), bt=document.getElementById("chatEnviar");
+  const msg=inp.value.trim();
+  if(!msg&&!anexosPendentes.length) return;
+  const anexos=anexosPendentes;
+  const box=document.getElementById("chatmsgs");
+  box.insertAdjacentHTML("beforeend",'<div class="msg voce">'+(msg?esc(msg):"")+chipsAnexos(anexos)+'</div><div class="msg pensando" id="pensando">Boss pensando…</div>');
+  box.scrollTop=box.scrollHeight; inp.value=""; anexosPendentes=[]; pintarAnexosPendentes(); bt.disabled=true;
+  try{
+    const r=await fetch("/boss/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mensagem:msg,anexos,projeto})});
+    const j=await r.json().catch(()=>({}));
+    document.getElementById("pensando")?.remove();
+    box.insertAdjacentHTML("beforeend",'<div class="msg boss">'+esc(j.resposta||j.erro||"(sem resposta)")+'</div>');
+    box.scrollTop=box.scrollHeight;
+  }catch{ document.getElementById("pensando")?.remove(); box.insertAdjacentHTML("beforeend",'<div class="msg boss">(erro ao falar com o Boss)</div>'); }
+  bt.disabled=false; inp.focus();
+}
+document.getElementById("chatEnviar").onclick=enviarBoss;
+document.getElementById("chatobj").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); enviarBoss(); } });
+`;
+
+const PAGINA = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Cockpit · Obra</title>
+<style>
+${ESTILO_BASE}
+header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
+h1{font-size:15px;letter-spacing:.28em;color:var(--ciano);font-weight:700}
+h1 b{color:var(--verde)}
+.abas{display:flex;gap:6px}
+.aba{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#6d8299;padding:6px 12px;border:1px solid var(--linha);
+ background:transparent;cursor:pointer;font-family:inherit}
+.aba.on{color:var(--marinho);background:var(--ciano);border-color:var(--ciano);font-weight:700}
+.aba.mais{color:var(--verde);border-style:dashed}
+.aba.mais:hover{background:var(--verde);color:var(--marinho)}
+.aba.boss{color:var(--ambar);border-color:var(--ambar)}
+.aba.boss:hover{background:var(--ambar);color:var(--marinho)}
+a.aba{text-decoration:none;display:inline-block}
+#conta{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:11px;color:#6d8299;white-space:nowrap}
+#conta b{font-weight:700}
+#conta .plano{color:var(--ciano);letter-spacing:.06em}
+#relogio{font-size:11px;color:#6d8299}
+
+/* chat do Boss — gaveta lateral (miolo compartilhado com a janela standalone, em CHAT_CSS) */
+.chat{position:fixed;top:0;right:0;width:min(420px,92vw);height:100vh;background:var(--painel);
+ border-left:1px solid var(--ambar);display:flex;flex-direction:column;transform:translateX(100%);
+ transition:transform .18s;z-index:20;
+ font-family:"JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
+ font-weight:300}
+.chat.on{transform:translateX(0)}
+${CHAT_CSS}
 
 /* modal de novo projeto */
 .modal{position:fixed;inset:0;background:rgba(3,8,15,.8);display:none;align-items:center;justify-content:center;z-index:10}
@@ -697,6 +775,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
   <div class="abas" id="abas"></div>
   <button class="aba mais" id="btNovo" title="Adicionar ou criar um projeto">+ novo</button>
   <button class="aba boss" id="btBoss" title="Falar com o Boss">💬 boss</button>
+  <a class="aba boss" id="btBossJanela" href="/boss" target="_blank" rel="noopener" title="Abrir o chat do Boss numa janela própria">↗</a>
   <span id="conta"></span>
   <span id="relogio"></span>
 </header>
@@ -757,7 +836,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 const PAPEIS=${JSON.stringify(PAPEIS)};
 let PROJETOS=${JSON.stringify(listaProjetos())};   // semente do 1º paint; atualizada a cada retrato
 let time="auto", projeto=(PROJETOS[0]||{}).slug;
-const esc=s=>String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+// esc() vem do CHAT_JS (função hoisted, definida mais abaixo) — uma função só, usada aqui e no chat.
 const est2cls={aguardando:"e-aguardando",trabalhando:"e-trabalhando",terminou:"e-terminou"};
 const dinheiro=v=>v==null?"—":"US$ "+Number(v).toFixed(2);
 
@@ -934,18 +1013,9 @@ function render(d){
   mapaGasto(d.gasto);
 }
 
-// ---- chat do Boss ----
+// ---- chat do Boss (miolo comum em CHAT_JS — mesma pintarChat/enviarBoss da janela standalone) ----
 const chat=document.getElementById("chat");
-function chipsAnexos(anexos){
-  if(!anexos||!anexos.length) return "";
-  return '<div class="anexos">'+anexos.map(a=>'<span class="anexo">📎 '+esc(a.nome)+'</span>').join("")+'</div>';
-}
-function pintarChat(msgs){
-  const box=document.getElementById("chatmsgs");
-  if(!msgs||!msgs.length){ box.innerHTML='<div class="chatvazio">Fala com o Boss. Ele responde na hora, e quando for código ele despacha pra obra sozinho.</div>'; return; }
-  box.innerHTML=msgs.map(m=>'<div class="msg '+(m.de==="voce"?"voce":"boss")+'">'+(m.texto?esc(m.texto):"")+chipsAnexos(m.anexos)+'</div>').join("");
-  box.scrollTop=box.scrollHeight;
-}
+${CHAT_JS}
 async function abrirChat(){
   chat.classList.add("on");
   // UM chefe-dos-chefes: conhece todos os projetos; a aba atual é só a dica de roteamento
@@ -956,60 +1026,6 @@ async function abrirChat(){
 }
 document.getElementById("btBoss").onclick=abrirChat;
 document.getElementById("chatFechar").onclick=()=>chat.classList.remove("on");
-
-// ---- anexos do chat: escolhe → sobe pro servidor na hora → some da lista quando a mensagem sai ----
-let anexosPendentes=[];
-function pintarAnexosPendentes(){
-  const box=document.getElementById("chatAnexos");
-  if(!anexosPendentes.length){ box.style.display="none"; box.innerHTML=""; return; }
-  box.style.display="flex";
-  box.innerHTML=anexosPendentes.map((a,i)=>'<span class="anexo">📎 '+esc(a.nome)+' <b data-i="'+i+'" title="remover">✕</b></span>').join("");
-  box.querySelectorAll("b").forEach(b=>b.onclick=()=>{ anexosPendentes.splice(+b.dataset.i,1); pintarAnexosPendentes(); });
-}
-function lerComoBase64(arquivo){
-  return new Promise((ok,erro)=>{
-    const r=new FileReader();
-    r.onload=()=>ok(String(r.result).split(",").pop());
-    r.onerror=erro;
-    r.readAsDataURL(arquivo);
-  });
-}
-document.getElementById("chatAnexar").onclick=()=>document.getElementById("chatArquivo").click();
-document.getElementById("chatArquivo").addEventListener("change",async e=>{
-  const arquivos=[...e.target.files]; e.target.value="";
-  for(const f of arquivos){
-    if(f.size>4*1024*1024){ alert('"'+f.name+'" passa de 4MB — não anexado'); continue; }
-    try{
-      const dados=await lerComoBase64(f);
-      const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:f.name,dados})});
-      const j=await r.json().catch(()=>({}));
-      if(!r.ok){ alert(j.erro||('não deu para anexar "'+f.name+'"')); continue; }
-      anexosPendentes.push({nome:j.nome,caminho:j.caminho});
-    }catch{ alert('erro ao anexar "'+f.name+'"'); }
-  }
-  pintarAnexosPendentes();
-});
-
-async function enviarBoss(){
-  const inp=document.getElementById("chatobj"), bt=document.getElementById("chatEnviar");
-  const msg=inp.value.trim();
-  if(!msg&&!anexosPendentes.length) return;
-  const anexos=anexosPendentes;
-  const box=document.getElementById("chatmsgs");
-  // pinta a sua msg + "pensando" na hora (a resposta demora alguns segundos)
-  box.insertAdjacentHTML("beforeend",'<div class="msg voce">'+(msg?esc(msg):"")+chipsAnexos(anexos)+'</div><div class="msg pensando" id="pensando">Boss pensando…</div>');
-  box.scrollTop=box.scrollHeight; inp.value=""; anexosPendentes=[]; pintarAnexosPendentes(); bt.disabled=true;
-  try{
-    const r=await fetch("/boss/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mensagem:msg,anexos,projeto})});
-    const j=await r.json().catch(()=>({}));
-    document.getElementById("pensando")?.remove();
-    box.insertAdjacentHTML("beforeend",'<div class="msg boss">'+esc(j.resposta||j.erro||"(sem resposta)")+'</div>');
-    box.scrollTop=box.scrollHeight;
-  }catch{ document.getElementById("pensando")?.remove(); box.insertAdjacentHTML("beforeend",'<div class="msg boss">(erro ao falar com o Boss)</div>'); }
-  bt.disabled=false; inp.focus();
-}
-document.getElementById("chatEnviar").onclick=enviarBoss;
-document.getElementById("chatobj").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); enviarBoss(); } });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ chat.classList.remove("on"); modal.classList.remove("on"); } });
 
 // heatmap "onde o dinheiro queimou": dia (linha) × hora (coluna), cor pela intensidade
@@ -1069,6 +1085,44 @@ conectarSSE();
 setInterval(()=>{ if(Date.now()-ultimoUpdate>=4000) puxar(); },2000); // cão-de-guarda: SSE mudo → poll
 </script></body></html>`;
 
+/**
+ * Página standalone do chat do Boss (GET /boss) — mesmo CSS/JS do bloco de chat da gaveta,
+ * sem os outros painéis do cockpit, pra abrir numa janela própria e deixar fixa enquanto se
+ * acompanha o grid de missões em outra aba. Mesmos endpoints da gaveta (/boss/historico,
+ * /boss/chat, /boss/anexo) — nenhuma lógica nova no servidor, só outra casca em volta do
+ * mesmo chat. Sem abas de projeto aqui, então não há dica de roteamento (projeto = null).
+ */
+const PAGINA_BOSS = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Boss · Obra</title>
+<style>
+${ESTILO_BASE}
+body{overflow:hidden}
+.chat{width:100%;height:100vh;display:flex;flex-direction:column;background:var(--painel);
+ font-family:"JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
+ font-weight:300}
+${CHAT_CSS}
+</style></head><body>
+<div class="chat" id="chat">
+  <div class="chatcab">💬 BOSS <span class="chatsub">chefe-dos-chefes · sessão dedicada · janela própria</span></div>
+  <div class="chatmsgs" id="chatmsgs"></div>
+  <div class="chatanexos" id="chatAnexos"></div>
+  <div class="chatentrada">
+    <input type="file" id="chatArquivo" multiple style="display:none">
+    <button id="chatAnexar" title="Anexar arquivo">📎</button>
+    <textarea id="chatobj" maxlength="4000" placeholder="Fala com o Boss… (ele responde ou despacha pra obra)"></textarea>
+    <button id="chatEnviar">Enviar</button>
+  </div>
+</div>
+<script>
+let projeto=null; // janela standalone não tem abas de projeto — Boss decide sem dica de aba
+${CHAT_JS}
+(async function(){
+  try{ pintarChat((await (await fetch("/boss/historico")).json()).mensagens); }catch{}
+  document.getElementById("chatobj").focus();
+})();
+</script>
+</body></html>`;
+
 createServer(async (req, res) => {
   const json = (c, o) => { res.writeHead(c, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(o)); };
   if (req.method === "POST" && req.url === "/missao") {
@@ -1080,6 +1134,10 @@ createServer(async (req, res) => {
     }
   }
   if (req.url === "/retrato") return json(200, retrato());
+  if (req.method === "GET" && req.url === "/boss") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    return res.end(PAGINA_BOSS);
+  }
   if (req.url === "/projetos/candidatos") return json(200, { candidatos: reposCandidatos() });
   if (req.url.startsWith("/boss/historico")) return json(200, { mensagens: lerBoss().mensagens.slice(-60) });
   if (req.method === "POST" && req.url === "/boss/chat") {
