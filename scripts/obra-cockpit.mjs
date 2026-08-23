@@ -534,13 +534,13 @@ h1 b{color:var(--verde)}
 #conta .plano{color:var(--ciano);letter-spacing:.06em}
 #relogio{font-size:11px;color:#6d8299}
 
-/* chat do Boss — gaveta lateral */
-.chat{position:fixed;top:0;right:0;width:min(420px,92vw);height:100vh;background:var(--painel);
- border-left:1px solid var(--ambar);display:flex;flex-direction:column;transform:translateX(100%);
+/* chat do Boss — painel inferior */
+.chat{position:fixed;bottom:0;left:0;right:0;width:100%;max-height:50vh;background:var(--painel);
+ border-top:1px solid var(--ambar);display:flex;flex-direction:column;transform:translateY(100%);
  transition:transform .18s;z-index:20;
  font-family:"JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
  font-weight:300}
-.chat.on{transform:translateX(0)}
+.chat.on{transform:translateY(0)}
 .chatcab{padding:14px 16px;border-bottom:1px solid var(--linha);font-size:12px;letter-spacing:.14em;
  color:var(--ambar);font-weight:600;display:flex;align-items:center;gap:10px}
 .chatsub{font-size:10px;letter-spacing:.06em;color:#6d8299;font-weight:300;text-transform:none}
