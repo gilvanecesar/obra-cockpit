@@ -287,16 +287,32 @@ function classificarTarefa(objetivo) {
   });
 }
 
+// Guarda os disparos recentes (chave objetivo+projeto → hora) — pega a duplicata na janela
+// em que o run file ainda nem foi escrito (reenvio/clique-duplo). O check por arquivo pega o
+// resto (missão já rodando). Sem isto, mandar 2× a mesma tarefa abre 2 missões e gasta dobrado.
+const despachosRecentes = new Map();
+const JANELA_DUP = 60000; // 1 min: cobre o reenvio "achei que não foi" (aconteceu com 27s)
+
 /** Dispara uma missão. Não bloqueia as outras — cada uma roda no seu worktree e status. */
 async function dispararMissao({ objetivo, projeto, time, forcar }) {
-  const rodando = retrato().ativas;
-  if (rodando >= MAX_PARALELO) throw new Error(`limite de ${MAX_PARALELO} missões ao mesmo tempo — espere uma terminar`);
+  const estado = retrato();
+  if (estado.ativas >= MAX_PARALELO) throw new Error(`limite de ${MAX_PARALELO} missões ao mesmo tempo — espere uma terminar`);
   const obj = String(objetivo || "").trim();
   if (!obj) throw new Error("escreva o objetivo");
   if (obj.length > 4000) throw new Error("objetivo grande demais");
 
   const proj = acharProjeto(projeto) || projetosDisponiveis()[0];
   if (!proj) throw new Error("nenhum projeto disponível");
+
+  // ANTI-DUPLICATA: a mesma tarefa não roda 2× ao mesmo tempo no mesmo projeto.
+  const chaveDup = proj.slug + "|" + obj.toLowerCase();
+  const recente = despachosRecentes.get(chaveDup);
+  const jaRodando = estado.missoes.some((m) => m.rodando && m.projeto === proj.nome && (m.objetivo || "").trim().toLowerCase() === obj.toLowerCase());
+  if (jaRodando || (recente && Date.now() - recente < JANELA_DUP)) {
+    throw new Error("essa mesma missão já está rodando — não vou duplicar");
+  }
+  // marca JÁ (antes do classificador ~3s): dois pedidos concorrentes não passam os dois
+  despachosRecentes.set(chaveDup, Date.now());
 
   /**
    * A TRAVA: antes de gastar o time, checa se o objetivo parece de OUTRO projeto. É a peça
