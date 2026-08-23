@@ -690,6 +690,17 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 .hdet{padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:12px}
 .hdet .lin{color:#8ba4bb}
 .hdet a{color:var(--ciano)}
+.verdiff{background:transparent;border:1px solid var(--linha);color:var(--ciano);cursor:pointer;
+ font:10px/1 "SF Mono",monospace;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;margin-left:8px}
+.verdiff:hover{background:var(--ciano);color:var(--marinho)}
+.diffbox{margin-top:8px;max-height:420px;overflow:auto;font:11px/1.45 "SF Mono",Menlo,monospace;border:1px solid var(--linha);background:#0a1219}
+.diffbox:empty{display:none}
+.diffbox .dl{white-space:pre;padding:0 10px}
+.diffbox .add{color:var(--verde);background:rgba(55,207,124,.07)}
+.diffbox .del{color:var(--verm);background:rgba(235,110,110,.07)}
+.diffbox .hh{color:var(--ciano)}
+.diffbox .ff{color:var(--ambar);font-weight:700;border-top:1px solid var(--linha);margin-top:4px}
+.diffbox .dim{color:#54708a}
 .hdet .papel{display:flex;gap:10px;align-items:baseline;border-top:1px solid #12202f;padding-top:7px}
 .hdet .papel .pn{color:var(--gelo);font-weight:700;min-width:92px}
 .hdet .papel .pm{color:var(--ambar);min-width:56px}
@@ -897,7 +908,9 @@ function quando(iso){ if(!iso) return ""; const m=Math.floor((Date.now()-new Dat
 function detalheMissao(h){
   let out="";
   if(h.tier) out+='<div class="lin">nível <b style="color:var(--gelo)">'+esc(h.tier)+'</b>'+(h.tierMotivo?' — '+esc(h.tierMotivo):'')+'</div>';
-  if(h.prUrl) out+='<div class="lin">PR: <a href="'+esc(h.prUrl)+'" target="_blank" rel="noreferrer">'+esc(h.prUrl)+'</a></div>';
+  if(h.prUrl) out+='<div class="lin">PR: <a href="'+esc(h.prUrl)+'" target="_blank" rel="noreferrer">'+esc(h.prUrl)+'</a>'+
+    ' <button class="verdiff" onclick="verDiff(this)" data-pr="'+esc(h.prUrl)+'">ver o que mudou</button></div>'+
+    '<div class="diffbox"></div>';
   if(h.vereditoMotivo) out+='<div class="lin">revisor: '+esc(h.vereditoMotivo)+'</div>';
   (h.papeis||[]).forEach(function(p){
     out+='<div class="papel"><span class="pn">'+(p.emoji||"")+' '+esc(p.nome)+'</span>'+
@@ -906,6 +919,28 @@ function detalheMissao(h){
       '<span class="pc">'+dinheiro(p.custo)+'</span></div>';
   });
   return out||'<div class="lin">sem detalhes guardados (missão antiga)</div>';
+}
+// "ver o que mudou": busca o diff do PR e mostra colorido, aqui no navegador (toggle)
+async function verDiff(btn){
+  const box=btn.closest(".hdet").querySelector(".diffbox");
+  if(box.getAttribute("data-aberto")){ box.innerHTML=""; box.removeAttribute("data-aberto"); btn.textContent="ver o que mudou"; return; }
+  btn.textContent="buscando…"; btn.disabled=true;
+  try{
+    const j=await (await fetch("/missao/diff?pr="+encodeURIComponent(btn.dataset.pr))).json();
+    box.innerHTML = j.diff ? pintarDiff(j.diff) : '<div class="dl dim" style="padding:8px 10px">'+esc(j.erro||"sem diff")+'</div>';
+    box.setAttribute("data-aberto","1"); btn.textContent="esconder";
+  }catch{ box.innerHTML='<div class="dl dim" style="padding:8px 10px">erro ao buscar o diff</div>'; }
+  btn.disabled=false;
+}
+function pintarDiff(txt){
+  return txt.split(/\\r?\\n/).map(function(l){
+    var c="dim";
+    if(l.startsWith("diff --git")||l.startsWith("+++")||l.startsWith("---")) c="ff";
+    else if(l.startsWith("@@")) c="hh";
+    else if(l[0]==="+") c="add";
+    else if(l[0]==="-") c="del";
+    return '<div class="dl '+c+'">'+esc(l||" ")+'</div>';
+  }).join("");
 }
 let histAssinatura="";
 function pintarHistorico(hist){
@@ -1174,6 +1209,16 @@ createServer(async (req, res) => {
   }
   if (req.url === "/retrato") return json(200, retrato());
   if (req.url === "/projetos/candidatos") return json(200, { candidatos: reposCandidatos() });
+  // "o que foi feito": o diff do PR da missão, pra ver NO NAVEGADOR sem ir pro GitHub.
+  if (req.url.startsWith("/missao/diff")) {
+    const pr = new URL(req.url, "http://x").searchParams.get("pr") || "";
+    const m = pr.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+    if (!m) return json(400, { erro: "PR inválido" });
+    const diff = await new Promise((ok) =>
+      execFile("gh", ["pr", "diff", m[3], "--repo", `${m[1]}/${m[2]}`],
+        { maxBuffer: 12e6, timeout: 20000 }, (e, out) => ok(e ? null : out)));
+    return json(200, diff == null ? { erro: "não consegui buscar o diff (gh autenticado?)" } : { diff: diff.slice(0, 200000) });
+  }
   if (req.url.startsWith("/boss/historico")) return json(200, { mensagens: lerBoss().mensagens.slice(-60) });
   if (req.method === "POST" && req.url === "/boss/chat") {
     try { const c = await lerCorpo(req, 8192); return json(200, await bossChat(c.mensagem, c.anexos, c.projeto)); }
