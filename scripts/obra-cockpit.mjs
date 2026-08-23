@@ -1044,19 +1044,31 @@ function lerComoBase64(arquivo){
     r.readAsDataURL(arquivo);
   });
 }
+let contadorColado=0;
+// sobe UM arquivo (do 📎 ou do colar) pro servidor e guarda como anexo pendente
+async function subirArquivo(f){
+  const nome=f.name||("colado-"+(++contadorColado)+"."+((f.type.split("/")[1])||"png"));
+  if(f.size>4*1024*1024){ alert('"'+nome+'" passa de 4MB — não anexado'); return; }
+  try{
+    const dados=await lerComoBase64(f);
+    const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome,dados})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){ alert(j.erro||('não deu para anexar "'+nome+'"')); return; }
+    anexosPendentes.push({nome:j.nome,caminho:j.caminho});
+  }catch{ alert('erro ao anexar "'+nome+'"'); }
+}
 document.getElementById("chatAnexar").onclick=()=>document.getElementById("chatArquivo").click();
 document.getElementById("chatArquivo").addEventListener("change",async e=>{
   const arquivos=[...e.target.files]; e.target.value="";
-  for(const f of arquivos){
-    if(f.size>4*1024*1024){ alert('"'+f.name+'" passa de 4MB — não anexado'); continue; }
-    try{
-      const dados=await lerComoBase64(f);
-      const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:f.name,dados})});
-      const j=await r.json().catch(()=>({}));
-      if(!r.ok){ alert(j.erro||('não deu para anexar "'+f.name+'"')); continue; }
-      anexosPendentes.push({nome:j.nome,caminho:j.caminho});
-    }catch{ alert('erro ao anexar "'+f.name+'"'); }
-  }
+  for(const f of arquivos) await subirArquivo(f);
+  pintarAnexosPendentes();
+});
+// COLAR imagem (Cmd+V) direto no chat → vira anexo (o print que você vive colando)
+document.getElementById("chatobj").addEventListener("paste",async e=>{
+  const imgs=[...(e.clipboardData&&e.clipboardData.items||[])].filter(it=>it.kind==="file"&&it.type.indexOf("image/")===0);
+  if(!imgs.length) return; // colou texto normal: deixa seguir
+  e.preventDefault();
+  for(const it of imgs){ const f=it.getAsFile(); if(f) await subirArquivo(f); }
   pintarAnexosPendentes();
 });
 
@@ -1190,12 +1202,23 @@ fetch("/boss/historico").then(r=>r.json()).then(j=>pintar(j.mensagens)).catch(()
 let pend=[];
 function pintarPend(){ const b=document.getElementById("anx"); b.innerHTML=pend.map((a,i)=>'<span>📎 '+esc(a.nome)+' <b data-i="'+i+'" style="cursor:pointer">✕</b></span>').join(""); b.querySelectorAll("b").forEach(x=>x.onclick=()=>{pend.splice(+x.dataset.i,1);pintarPend();}); }
 const b64=f=>new Promise((ok,e)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",").pop());r.onerror=e;r.readAsDataURL(f);});
+let nColado=0;
+async function subir(f){
+  const nome=f.name||("colado-"+(++nColado)+"."+((f.type.split("/")[1])||"png"));
+  if(f.size>4*1024*1024){ alert('"'+nome+'" passa de 4MB'); return; }
+  try{ const dados=await b64(f); const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome,dados})}); const j=await r.json(); if(!r.ok){alert(j.erro||"não deu");return;} pend.push({nome:j.nome,caminho:j.caminho}); }catch{ alert("erro ao anexar"); }
+}
 document.getElementById("anexar").onclick=()=>document.getElementById("arq").click();
 document.getElementById("arq").addEventListener("change",async e=>{
-  for(const f of [...e.target.files]){ e.target.value="";
-    if(f.size>4*1024*1024){ alert('"'+f.name+'" passa de 4MB'); continue; }
-    try{ const dados=await b64(f); const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:f.name,dados})}); const j=await r.json(); if(!r.ok){alert(j.erro||"não deu");continue;} pend.push({nome:j.nome,caminho:j.caminho}); }catch{ alert("erro ao anexar"); }
-  }
+  const fs=[...e.target.files]; e.target.value="";
+  for(const f of fs) await subir(f);
+  pintarPend();
+});
+document.getElementById("obj").addEventListener("paste",async e=>{
+  const imgs=[...(e.clipboardData&&e.clipboardData.items||[])].filter(it=>it.kind==="file"&&it.type.indexOf("image/")===0);
+  if(!imgs.length) return;
+  e.preventDefault();
+  for(const it of imgs){ const f=it.getAsFile(); if(f) await subir(f); }
   pintarPend();
 });
 async function enviar(){
