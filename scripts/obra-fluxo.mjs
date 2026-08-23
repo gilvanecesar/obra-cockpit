@@ -111,6 +111,9 @@ function escreverStatus(papel, patch) {
   let s; try { s = JSON.parse(readFileSync(STATUS, "utf8")); } catch { s = {}; }
   s.task = tituloCurto; s.runId = NONCE; s.objetivo = tarefa; s.projeto = NOME_REPO;
   s.comecou = s.comecou || COMECOU; s.pid = process.pid; s.agents = s.agents || {};
+  // Nível escolhido pelo roteador de custo do cockpit (leve/medio/pesado) — pro histórico
+  // mostrar POR QUE cada missão usou o modelo que usou. Vazio quando não veio pelo Auto.
+  if (process.env.OBRA_TIER) { s.tier = process.env.OBRA_TIER; s.tierMotivo = process.env.OBRA_TIER_MOTIVO || ""; }
   if (papel) s.agents[papel] = { ...(s.agents[papel] || {}), ...patch };
   writeFileSync(STATUS, JSON.stringify(s, null, 2));
 }

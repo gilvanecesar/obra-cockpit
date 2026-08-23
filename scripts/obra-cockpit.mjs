@@ -74,6 +74,32 @@ function guardarMissao(m) {
 
 const lerStatus = (arquivo) => { try { return JSON.parse(readFileSync(arquivo, "utf8")); } catch { return null; } };
 
+/** O link do PR, garimpado do resultado do passo PR (ex.: "PR: https://github.com/.../pull/12"). */
+const prDoStatus = (s) => (String(s?.agents?.pr?.result || "").match(/https:\/\/github\.com\/\S+?\/pull\/\d+/) || [null])[0];
+
+/**
+ * O registro RICO de uma missão pro histórico: além de custo/veredito, guarda o PR, o nível
+ * escolhido (tier), o motivo do veredito e o CUSTO POR PAPEL — pra você abrir e ver o que
+ * cada agente fez e gastou, sem precisar do arquivo de status (que some em 30s).
+ */
+function registroRico(s) {
+  const ag = s.agents || {};
+  return {
+    objetivo: s.objetivo || s.task, projeto: s.projeto || "?",
+    comecou: s.comecou || null, fim: s.fim || null,
+    custo: s.custoTotal ?? null, veredito: s.veredito || "terminou",
+    tier: s.tier || null, tierMotivo: s.tierMotivo || null,
+    prUrl: prDoStatus(s),
+    vereditoMotivo: String(ag.revisor?.result || "").slice(0, 300) || null,
+    papeis: PAPEIS.map((p) => {
+      const a = ag[p.chave] || {};
+      return { chave: p.chave, nome: p.nome, emoji: p.emoji,
+        modelo: a.modelo || null, custo: a.custo ?? null, turnos: a.turnos ?? null,
+        resultado: String(a.result || "").slice(0, 300) || null };
+    }).filter((x) => x.modelo || x.custo != null || x.resultado),
+  };
+}
+
 /**
  * CONTA (assinatura) que está rodando os agentes. `claude auth status` demora ~200ms — nunca
  * chamar isso dentro de retrato() (o SSE lê retrato ~1×/s e travaria o servidor pra todo mundo
@@ -140,6 +166,8 @@ function missaoDeArquivo(arquivo) {
     morta,
     comecou: s.comecou || null, fim: s.fim || null,
     veredito: s.veredito || (morta ? "interrompida" : null),
+    tier: s.tier || null, tierMotivo: s.tierMotivo || null,
+    prUrl: prDoStatus(s),
     custoTotal: s.custoTotal ?? paineis.reduce((t, p) => t + (p.custo || 0), 0),
     paineis,
   };
@@ -210,11 +238,7 @@ function varrerEncerradas() {
     const id = s.runId || arquivo;
     if (!jaNoHistorico.has(id)) {
       jaNoHistorico.add(id);
-      guardarMissao({
-        objetivo: s.objetivo || s.task, projeto: s.projeto || "?",
-        comecou: s.comecou || null, fim: s.fim || null,
-        custo: s.custoTotal ?? null, veredito: s.veredito || "terminou",
-      });
+      guardarMissao(registroRico(s));
     }
     // remove o arquivo 30s após o fim — INCLUSIVE o legado, senão a missão encerrada fica na
     // tela pra sempre e é re-arquivada a cada reinício. (Old-style obra-fluxo recria o legado
@@ -226,8 +250,45 @@ function varrerEncerradas() {
 }
 setInterval(varrerEncerradas, 5000);
 
+/**
+ * ROTEADOR DE CUSTO (modo Auto): um haiku barato lê o objetivo e escolhe o TIER de modelos
+ * mais barato que dá conta. É o "modelo mais barato pra determinada tarefa" — dentro do Claude,
+ * sem custo de assinatura nova. Na dúvida entre dois níveis, escolhe o mais barato (o revisor
+ * pega o resto). Cada tier define o modelo por papel; PR é sempre haiku (só roda git).
+ */
+const TIERS = {
+  leve:   { ENG: "haiku",  QA: "haiku",  REVISOR: "sonnet" },
+  medio:  { ENG: "sonnet", QA: "haiku",  REVISOR: "sonnet" },
+  pesado: { ENG: "opus",   QA: "sonnet", REVISOR: "opus" },
+};
+function classificarTarefa(objetivo) {
+  return new Promise((ok) => {
+    const prompt =
+      'Classifique a tarefa de programação em UM nível e responda SÓ com JSON ' +
+      '{"tier":"leve|medio|pesado","motivo":"curto"}.\n' +
+      '- leve: texto/doc/README/renomear/mudança trivial.\n' +
+      '- medio: feature/fix/teste comum.\n' +
+      '- pesado: lógica complexa, OU toca em dinheiro/pagamento/acesso/permissão/dado sensível.\n' +
+      'Na dúvida entre dois, escolha o MAIS BARATO.\nTAREFA: ' + objetivo;
+    let buf = "";
+    let cp;
+    try { cp = spawn("claude", ["-p", prompt, "--model", "haiku", "--output-format", "stream-json", "--verbose"],
+      { cwd: RAIZ, env: process.env, stdio: ["ignore", "pipe", "pipe"] }); }
+    catch { return ok({ tier: "medio", motivo: "classificador indisponível" }); }
+    cp.stdout.on("data", (d) => { buf += d; });
+    cp.on("error", () => ok({ tier: "medio", motivo: "classificador indisponível" }));
+    cp.on("close", () => {
+      let texto = "";
+      for (const l of buf.split(/\r?\n/)) { const s = l.trim(); if (!s.startsWith("{")) continue; let ev; try { ev = JSON.parse(s); } catch { continue; } if (ev.type === "result") texto = ev.result || texto; }
+      const m = texto.match(/\{[\s\S]*\}/);
+      if (m) { try { const j = JSON.parse(m[0]); if (TIERS[j.tier]) return ok({ tier: j.tier, motivo: String(j.motivo || "").slice(0, 140) }); } catch {} }
+      ok({ tier: "medio", motivo: "não classifiquei — usei médio" });
+    });
+  });
+}
+
 /** Dispara uma missão. Não bloqueia as outras — cada uma roda no seu worktree e status. */
-function dispararMissao({ objetivo, projeto, time, forcar }) {
+async function dispararMissao({ objetivo, projeto, time, forcar }) {
   const rodando = retrato().ativas;
   if (rodando >= MAX_PARALELO) throw new Error(`limite de ${MAX_PARALELO} missões ao mesmo tempo — espere uma terminar`);
   const obj = String(objetivo || "").trim();
@@ -251,13 +312,22 @@ function dispararMissao({ objetivo, projeto, time, forcar }) {
   // Sem OBRA_STATUS: o obra-fluxo grava sozinho em .herdr-obra-runs/, que o cockpit varre —
   // a mesma porta das missões lançadas por fora. A "receita" do time vira env que ele já lê.
   const env = { ...process.env };
-  if (time === "rapido") { env.OBRA_MODELO_ENG = "sonnet"; env.OBRA_MODELO_QA = "haiku"; env.OBRA_MODELO_REVISOR = "sonnet"; }
+  let tier = null, tierMotivo = null;
+  if (time === "rapido") {
+    env.OBRA_MODELO_ENG = "sonnet"; env.OBRA_MODELO_QA = "haiku"; env.OBRA_MODELO_REVISOR = "sonnet";
+  } else if (time === "auto") {
+    const c = await classificarTarefa(obj);       // haiku barato decide o nível
+    tier = c.tier; tierMotivo = c.motivo;
+    const t = TIERS[tier];
+    env.OBRA_MODELO_ENG = t.ENG; env.OBRA_MODELO_QA = t.QA; env.OBRA_MODELO_REVISOR = t.REVISOR;
+    env.OBRA_TIER = tier; env.OBRA_TIER_MOTIVO = tierMotivo;
+  } // caprichado: sem override (opus onde decide, o padrão do obra-fluxo)
 
   const args = [FLUXO, obj];
   if (proj.dir !== RAIZ) args.push("--projeto", proj.dir);
   const filho = spawn("node", args, { cwd: RAIZ, env, detached: false });
   filho.on("error", () => {}); // não derruba o cockpit se o spawn falhar
-  return { pid: filho.pid, projeto: proj.nome };
+  return { pid: filho.pid, projeto: proj.nome, tier, tierMotivo };
 }
 
 /**
@@ -303,9 +373,17 @@ function novoProjeto({ modo, nome, dir, palavras }) {
 // ================== CHAT DO BOSS (um Claude no navegador) ==================
 // Sessão DEDICADA: o contexto cresce sozinho (resume a mesma sessão) e conhece o projeto
 // pela memória/CLAUDE.md — sem se misturar com a conversa do terminal.
-const BOSS = resolve(RAIZ, ".herdr-obra-boss.json"); // { sessionId, mensagens: [{de,texto,anexos,em}] }
-const lerBoss = () => { try { return JSON.parse(readFileSync(BOSS, "utf8")); } catch { return { sessionId: null, mensagens: [] }; } };
-const salvarBoss = (b) => writeFileSync(BOSS, JSON.stringify(b, null, 2));
+// UM CHEFE POR PROJETO: mapa keyed por slug — { "<slug>": { sessionId, mensagens:[...] } }.
+// Cada projeto tem sua sessão dedicada (contexto próprio, cresce sozinho) e seu histórico. É o
+// "condomínio": você fala com o chefe do projeto que está selecionado, e ele conhece o CLAUDE.md
+// e a memória DAQUELE repositório (o claude roda com cwd na pasta do projeto).
+const BOSS = resolve(RAIZ, ".herdr-obra-boss.json");
+function lerBossTudo() {
+  try { const t = JSON.parse(readFileSync(BOSS, "utf8")); return (t && !Array.isArray(t.mensagens)) ? t : {}; }
+  catch { return {}; }   // (shape antigo {sessionId,mensagens} é descartado — chat é efêmero)
+}
+const lerBoss = (slug) => lerBossTudo()[slug] || { sessionId: null, mensagens: [] };
+const salvarBoss = (slug, b) => { const t = lerBossTudo(); t[slug] = b; writeFileSync(BOSS, JSON.stringify(t, null, 2)); };
 
 // Arquivos que o dono anexa no chat do Boss. Ficam FORA do worktree de qualquer missão (isto
 // aqui é a raiz do cockpit, não um projeto-alvo) — mas ainda assim gitignorados (.herdr-obra*),
@@ -334,30 +412,34 @@ function salvarAnexo({ nome, dados }) {
   return { caminho, nome: limpo, tamanho: buf.length };
 }
 
-const BOSS_PROMPT = [
-  "Você é o BOSS da obra do Gilvane (dono do QueroFretes/TMS), falando com ele no chat do cockpit.",
-  "Você COORDENA um time de agentes (engenheiro→QA→revisor→PR) que roda em projetos separados.",
-  "Projetos disponíveis (slug): " + projetosDisponiveis().map((p) => `${p.slug} (${p.nome})`).join(", ") + ".",
-  "Leia o CLAUDE.md e a pasta memory/ quando precisar de contexto do projeto (tem as regras da casa).",
-  "REGRA DE ROTEAMENTO (você decide, não pergunte toda vez):",
-  "- Tarefa de CÓDIGO fechada (feature, fix, teste) que vira PR → DESPACHE pra obra terminando a resposta",
-  "  com um marcador em UMA linha: [MISSAO: <slug-do-projeto> | <objetivo claro e completo>].",
-  "- Dúvida, conversa, arquitetura, algo rápido → responda você mesmo, curto, sem marcador.",
-  "Antes do marcador, escreva 1-2 linhas dizendo o que vai despachar e pra qual projeto.",
-  "Quando a mensagem trouxer 'Arquivos anexados pelo dono', são caminhos locais no disco —",
-  "leia com Read se o conteúdo importar para a resposta ou para o objetivo que vai despachar.",
-  "Seja conciso e direto, em português do Brasil. Não invente número nem promessa.",
-].join("\n");
+/** O prompt do chefe DESTE projeto — ele despacha só pra ele; se for de outro, avisa. */
+function bossPrompt(proj) {
+  const outros = projetosDisponiveis().filter((p) => p.slug !== proj.slug).map((p) => `${p.slug} (${p.nome})`).join(", ");
+  return [
+    `Você é o BOSS do projeto ${proj.nome} (${proj.slug}), falando com o Gilvane no cockpit.`,
+    "Você está DENTRO do repositório deste projeto — leia o CLAUDE.md e a pasta memory/ dele quando precisar de contexto (tem as regras da casa).",
+    "Você COORDENA um time (engenheiro→QA→revisor→PR) que roda NESTE projeto.",
+    "REGRA DE ROTEAMENTO (você decide, não pergunte toda vez):",
+    "- Tarefa de CÓDIGO fechada (feature, fix, teste) que vira PR → DESPACHE terminando a resposta",
+    `  com um marcador em UMA linha: [MISSAO: ${proj.slug} | <objetivo claro e completo>].`,
+    "- Dúvida, conversa, arquitetura, algo rápido → responda você mesmo, curto, sem marcador.",
+    outros ? `Se a tarefa for claramente de OUTRO projeto (${outros}), AVISE em vez de despachar aqui.` : "",
+    "Antes do marcador, escreva 1-2 linhas dizendo o que vai despachar.",
+    "Quando a mensagem trouxer 'Arquivos anexados pelo dono', são caminhos locais no disco —",
+    "leia com Read se o conteúdo importar para a resposta ou para o objetivo que vai despachar.",
+    "Seja conciso e direto, em português do Brasil. Não invente número nem promessa.",
+  ].filter(Boolean).join("\n");
+}
 
-/** Roda o Claude como Boss (assíncrono, não trava o event loop). Devolve texto + sessionId. */
-function rodarBoss(mensagem, sessionId) {
+/** Roda o Claude como chefe do projeto (assíncrono). cwd = pasta do projeto → lê o CLAUDE.md dele. */
+function rodarBoss(mensagem, sessionId, proj) {
   return new Promise((ok) => {
-    const args = ["-p", mensagem, "--append-system-prompt", BOSS_PROMPT,
+    const args = ["-p", mensagem, "--append-system-prompt", bossPrompt(proj),
       "--allowedTools", "Read,Grep,Glob", "--model", "sonnet",
       "--output-format", "stream-json", "--verbose"];
     if (sessionId) args.push("--resume", sessionId);
     let buf = "";
-    const cp = spawn("claude", args, { cwd: RAIZ, env: process.env });
+    const cp = spawn("claude", args, { cwd: proj.dir, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     cp.stdout.on("data", (d) => { buf += d; });
     cp.stderr.on("data", (d) => { buf += d; });
     cp.on("error", () => ok({ texto: "(não consegui falar com o Boss — o CLI do Claude está no PATH?)", sessionId }));
@@ -375,8 +457,10 @@ function rodarBoss(mensagem, sessionId) {
   });
 }
 
-/** Uma mensagem do dono → resposta do Boss (+ despacho se ele decidir que é obra). */
-async function bossChat(mensagem, anexos) {
+/** Uma mensagem do dono → resposta do chefe DO PROJETO (+ despacho se ele decidir que é obra). */
+async function bossChat(mensagem, anexos, projeto) {
+  const proj = acharProjeto(projeto) || projetosDisponiveis()[0];
+  if (!proj) throw new Error("nenhum projeto disponível");
   const msg = String(mensagem || "").trim();
   // Só aceita anexo que a GENTE salvou em /boss/anexo (caminho dentro de ANEXOS) — senão a
   // mensagem viraria uma porta para mandar o Boss (que tem Read) ler qualquer arquivo do disco.
@@ -386,14 +470,14 @@ async function bossChat(mensagem, anexos) {
     .filter((a) => a.caminho.startsWith(ANEXOS + "/") && existsSync(a.caminho));
   if (!msg && !validos.length) throw new Error("escreva a mensagem ou anexe um arquivo");
   if (msg.length > 4000) throw new Error("mensagem grande demais");
-  const b = lerBoss();
+  const b = lerBoss(proj.slug);
   b.mensagens.push({ de: "voce", texto: msg, anexos: validos, em: new Date().toISOString() });
 
   const paraBoss = msg + (validos.length
     ? (msg ? "\n\n" : "") + "Arquivos anexados pelo dono:\n" +
       validos.map((a) => `- ${a.nome}: ${a.caminho}`).join("\n")
     : "");
-  const r = await rodarBoss(paraBoss, b.sessionId);
+  const r = await rodarBoss(paraBoss, b.sessionId, proj);
   if (r.sessionId) b.sessionId = r.sessionId; // fixa a sessão dedicada na 1ª resposta
 
   // O Boss decidiu despachar? [MISSAO: slug | objetivo]
@@ -403,7 +487,7 @@ async function bossChat(mensagem, anexos) {
   while ((m = re.exec(r.texto))) {
     const slug = m[1].trim(), objetivo = m[2].trim();
     try {
-      const d = dispararMissao({ objetivo, projeto: slug, forcar: true }); // o Boss já escolheu o projeto
+      const d = await dispararMissao({ objetivo, projeto: slug, time: "auto", forcar: true }); // Boss já escolheu o projeto; Auto escolhe o modelo
       despachos.push(`✅ despachei pra obra: ${d.projeto} — "${objetivo.slice(0, 60)}"`);
     } catch (e) {
       despachos.push(`⚠️ não consegui despachar (${e.message})`);
@@ -414,7 +498,7 @@ async function bossChat(mensagem, anexos) {
 
   b.mensagens.push({ de: "boss", texto, em: new Date().toISOString() });
   b.mensagens = b.mensagens.slice(-60); // guarda as últimas 60 na tela (a sessão do Claude tem o resto)
-  salvarBoss(b);
+  salvarBoss(proj.slug, b);
   return { resposta: texto };
 }
 
@@ -579,9 +663,29 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 .hv-reprovado{color:var(--verm);border-color:var(--verm)}
 .hv-terminou{color:var(--ciano);border-color:var(--ciano)}
 .hv-falhou{color:var(--ambar);border-color:var(--ambar)}
+.hv-interrompida{color:var(--ambar);border-color:var(--ambar)}
 .hrow .ho{flex:1;color:var(--gelo);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hrow .hp{color:#6d8299;flex:none}
 .hrow .hc{color:var(--verde);flex:none}
+/* histórico expansível */
+.hitem{border:1px solid var(--linha);background:var(--painel)}
+.hitem>summary{list-style:none;cursor:pointer}
+.hitem>summary::-webkit-details-marker{display:none}
+.hitem .hrow{border:0;background:transparent}
+.hitem[open] .hrow{border-bottom:1px solid var(--linha)}
+.hdet{padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:12px}
+.hdet .lin{color:#8ba4bb}
+.hdet a{color:var(--ciano)}
+.hdet .papel{display:flex;gap:10px;align-items:baseline;border-top:1px solid #12202f;padding-top:7px}
+.hdet .papel .pn{color:var(--gelo);font-weight:700;min-width:92px}
+.hdet .papel .pm{color:var(--ambar);min-width:56px}
+.hdet .papel .pr{flex:1;color:#8ba4bb;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.hdet .papel .pc{color:var(--verde)}
+/* chip de nível (tier) */
+.tier{font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border:1px solid;flex:none}
+.tier-leve{color:var(--verde);border-color:var(--verde)}
+.tier-medio{color:var(--ciano);border-color:var(--ciano)}
+.tier-pesado{color:var(--verm);border-color:var(--verm)}
 /* pergunta do conflito */
 .conflito{width:100%;background:#1a1206;border:1px solid var(--ambar);padding:12px 14px;margin-top:4px;font-size:13px;color:var(--gelo)}
 .conflito b{color:var(--ambar)}
@@ -599,7 +703,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
   <span id="relogio"></span>
 </header>
 <div class="chat" id="chat">
-  <div class="chatcab">💬 BOSS <span class="chatsub">sessão dedicada · conhece o projeto</span>
+  <div class="chatcab">💬 BOSS <span class="chatsub" id="chatProj">sessão dedicada · conhece o projeto</span>
     <button id="chatFechar" title="Fechar">✕</button></div>
   <div class="chatmsgs" id="chatmsgs"></div>
   <div class="chatanexos" id="chatAnexos"></div>
@@ -638,8 +742,9 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 <div class="compositor">
   <textarea id="obj" maxlength="4000" placeholder="O que o time deve fazer? (ex.: adicionar um teste para X, corrigir o bug Y)"></textarea>
   <div class="timesel" id="time">
-    <button data-t="caprichado" class="on">Caprichado</button>
-    <button data-t="rapido">Rápido</button>
+    <button data-t="auto" class="on" title="O cockpit escolhe o modelo mais barato que dá conta">Auto</button>
+    <button data-t="caprichado" title="Opus onde decide (caro, robusto)">Caprichado</button>
+    <button data-t="rapido" title="Tudo leve (barato)">Rápido</button>
   </div>
   <button id="rodar">Acionar time</button>
   <span class="cap" id="cap"></span>
@@ -653,7 +758,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 <script>
 const PAPEIS=${JSON.stringify(PAPEIS)};
 let PROJETOS=${JSON.stringify(listaProjetos())};   // semente do 1º paint; atualizada a cada retrato
-let time="caprichado", projeto=(PROJETOS[0]||{}).slug;
+let time="auto", projeto=(PROJETOS[0]||{}).slug;
 const esc=s=>String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
 const est2cls={aguardando:"e-aguardando",trabalhando:"e-trabalhando",terminou:"e-terminou"};
 const dinheiro=v=>v==null?"—":"US$ "+Number(v).toFixed(2);
@@ -669,6 +774,7 @@ function pintarAbas(){
     '<button class="aba'+(p.slug===projeto?" on":"")+'" data-p="'+esc(p.slug)+'">'+esc(p.nome)+'</button>').join("");
   document.querySelectorAll(".abas .aba").forEach(b=>b.onclick=()=>{
     projeto=b.dataset.p; document.querySelectorAll(".abas .aba").forEach(x=>x.classList.toggle("on",x===b));
+    if(document.getElementById("chat").classList.contains("on")) abrirChat(); // troca pro chefe do projeto
   });
 }
 pintarAbas();
@@ -757,9 +863,10 @@ function role(p){
       '<span class="cu">'+dinheiro(p.custo)+'</span></div></div>';
 }
 
+const chipTier=t=>t?'<span class="tier tier-'+esc(t)+'" title="nível escolhido pelo roteador de custo">'+esc(t)+'</span>':'';
 function missaoCard(m){
   return '<div class="mcard'+(m.rodando?" rodando":"")+'">'+
-    '<div class="mhead"><span class="proj">'+esc(m.projeto)+'</span>'+
+    '<div class="mhead"><span class="proj">'+esc(m.projeto)+'</span>'+chipTier(m.tier)+
       '<span class="obj">'+esc(m.objetivo)+'</span>'+
       '<span class="badge '+(m.rodando?"b-on":"b-off")+'">'+(m.rodando?"rodando":"encerrada")+'</span>'+
       '<span class="custo">'+dinheiro(m.custoTotal)+'</span></div>'+
@@ -768,6 +875,36 @@ function missaoCard(m){
 
 function quando(iso){ if(!iso) return ""; const m=Math.floor((Date.now()-new Date(iso))/60000);
   return m<1?"agora":m<60?"há "+m+"min":m<1440?"há "+Math.floor(m/60)+"h":"há "+Math.floor(m/1440)+"d"; }
+
+// histórico RICO: cada linha abre e mostra PR, nível, motivo do veredito e custo POR PAPEL
+function detalheMissao(h){
+  let out="";
+  if(h.tier) out+='<div class="lin">nível <b style="color:var(--gelo)">'+esc(h.tier)+'</b>'+(h.tierMotivo?' — '+esc(h.tierMotivo):'')+'</div>';
+  if(h.prUrl) out+='<div class="lin">PR: <a href="'+esc(h.prUrl)+'" target="_blank" rel="noreferrer">'+esc(h.prUrl)+'</a></div>';
+  if(h.vereditoMotivo) out+='<div class="lin">revisor: '+esc(h.vereditoMotivo)+'</div>';
+  (h.papeis||[]).forEach(function(p){
+    out+='<div class="papel"><span class="pn">'+(p.emoji||"")+' '+esc(p.nome)+'</span>'+
+      '<span class="pm">'+esc(p.modelo||"—")+'</span>'+
+      '<span class="pr">'+esc(p.resultado||"")+'</span>'+
+      '<span class="pc">'+dinheiro(p.custo)+'</span></div>';
+  });
+  return out||'<div class="lin">sem detalhes guardados (missão antiga)</div>';
+}
+let histAssinatura="";
+function pintarHistorico(hist){
+  const ass=hist.map(h=>(h.objetivo||"")+(h.fim||"")+(h.custo||"")).join("|");
+  if(ass===histAssinatura) return;   // nada mudou: não repinta (mantém aberto o que você expandiu)
+  histAssinatura=ass;
+  document.getElementById("historico").innerHTML=hist.map(function(h){
+    return '<details class="hitem"><summary><div class="hrow">'+
+      '<span class="hv hv-'+esc(h.veredito)+'">'+esc(h.veredito)+'</span>'+chipTier(h.tier)+
+      '<span class="ho">'+esc(h.objetivo)+'</span>'+
+      '<span class="hp">'+esc(h.projeto)+'</span>'+
+      '<span class="hp">'+quando(h.fim)+'</span>'+
+      '<span class="hc">'+dinheiro(h.custo)+'</span></div></summary>'+
+      '<div class="hdet">'+detalheMissao(h)+'</div></details>';
+  }).join("");
+}
 
 // assinatura (plano) + o que a obra já gastou — não existe "saldo de créditos" pra mostrar no
 // plano por assinatura (é limite de uso, não consumo por crédito); o que É medível é o gasto.
@@ -793,13 +930,7 @@ function render(d){
     : '<div class="vazio"><b>Nenhuma missão ainda</b>escreva o objetivo acima e acione o time — pode mandar várias</div>';
   const hist=d.historico||[];
   document.getElementById("hsec").style.display=hist.length?"block":"none";
-  document.getElementById("historico").innerHTML=hist.map(function(h){
-    return '<div class="hrow"><span class="hv hv-'+esc(h.veredito)+'">'+esc(h.veredito)+'</span>'+
-      '<span class="ho">'+esc(h.objetivo)+'</span>'+
-      '<span class="hp">'+esc(h.projeto)+'</span>'+
-      '<span class="hp">'+quando(h.fim)+'</span>'+
-      '<span class="hc">'+dinheiro(h.custo)+'</span></div>';
-  }).join("");
+  pintarHistorico(hist);
   mapaGasto(d.gasto);
 }
 
@@ -817,7 +948,10 @@ function pintarChat(msgs){
 }
 async function abrirChat(){
   chat.classList.add("on");
-  try{ pintarChat((await (await fetch("/boss/historico")).json()).mensagens); }catch{}
+  // chefe DO projeto selecionado — cabeçalho e histórico são daquele projeto
+  const nome=(PROJETOS.find(p=>p.slug===projeto)||{}).nome||projeto||"";
+  document.getElementById("chatProj").textContent="chefe de "+nome+" · sessão dedicada";
+  try{ pintarChat((await (await fetch("/boss/historico?projeto="+encodeURIComponent(projeto))).json()).mensagens); }catch{}
   document.getElementById("chatobj").focus();
 }
 document.getElementById("btBoss").onclick=abrirChat;
@@ -866,7 +1000,7 @@ async function enviarBoss(){
   box.insertAdjacentHTML("beforeend",'<div class="msg voce">'+(msg?esc(msg):"")+chipsAnexos(anexos)+'</div><div class="msg pensando" id="pensando">Boss pensando…</div>');
   box.scrollTop=box.scrollHeight; inp.value=""; anexosPendentes=[]; pintarAnexosPendentes(); bt.disabled=true;
   try{
-    const r=await fetch("/boss/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mensagem:msg,anexos})});
+    const r=await fetch("/boss/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mensagem:msg,anexos,projeto})});
     const j=await r.json().catch(()=>({}));
     document.getElementById("pensando")?.remove();
     box.insertAdjacentHTML("beforeend",'<div class="msg boss">'+esc(j.resposta||j.erro||"(sem resposta)")+'</div>');
@@ -938,7 +1072,7 @@ setInterval(()=>{ if(Date.now()-ultimoUpdate>=4000) puxar(); },2000); // cão-de
 createServer(async (req, res) => {
   const json = (c, o) => { res.writeHead(c, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(o)); };
   if (req.method === "POST" && req.url === "/missao") {
-    try { return json(201, dispararMissao(await lerCorpo(req))); }
+    try { return json(201, await dispararMissao(await lerCorpo(req))); }
     catch (e) {
       // Conflito de projeto (409) devolve a sugestão para a tela perguntar "rodar mesmo assim?".
       if (e.code === 409) return json(409, { erro: e.message, conflito: e.conflito });
@@ -947,9 +1081,12 @@ createServer(async (req, res) => {
   }
   if (req.url === "/retrato") return json(200, retrato());
   if (req.url === "/projetos/candidatos") return json(200, { candidatos: reposCandidatos() });
-  if (req.url === "/boss/historico") return json(200, { mensagens: lerBoss().mensagens.slice(-60) });
+  if (req.url.startsWith("/boss/historico")) {
+    const slug = new URL(req.url, "http://x").searchParams.get("projeto") || (projetosDisponiveis()[0] || {}).slug;
+    return json(200, { mensagens: lerBoss(slug).mensagens.slice(-60) });
+  }
   if (req.method === "POST" && req.url === "/boss/chat") {
-    try { const c = await lerCorpo(req, 8192); return json(200, await bossChat(c.mensagem, c.anexos)); }
+    try { const c = await lerCorpo(req, 8192); return json(200, await bossChat(c.mensagem, c.anexos, c.projeto)); }
     catch (e) { return json(400, { erro: e.message }); }
   }
   if (req.method === "POST" && req.url === "/boss/anexo") {
