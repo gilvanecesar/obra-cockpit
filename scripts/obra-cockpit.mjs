@@ -373,17 +373,12 @@ function novoProjeto({ modo, nome, dir, palavras }) {
 // ================== CHAT DO BOSS (um Claude no navegador) ==================
 // Sessão DEDICADA: o contexto cresce sozinho (resume a mesma sessão) e conhece o projeto
 // pela memória/CLAUDE.md — sem se misturar com a conversa do terminal.
-// UM CHEFE POR PROJETO: mapa keyed por slug — { "<slug>": { sessionId, mensagens:[...] } }.
-// Cada projeto tem sua sessão dedicada (contexto próprio, cresce sozinho) e seu histórico. É o
-// "condomínio": você fala com o chefe do projeto que está selecionado, e ele conhece o CLAUDE.md
-// e a memória DAQUELE repositório (o claude roda com cwd na pasta do projeto).
-const BOSS = resolve(RAIZ, ".herdr-obra-boss.json");
-function lerBossTudo() {
-  try { const t = JSON.parse(readFileSync(BOSS, "utf8")); return (t && !Array.isArray(t.mensagens)) ? t : {}; }
-  catch { return {}; }   // (shape antigo {sessionId,mensagens} é descartado — chat é efêmero)
-}
-const lerBoss = (slug) => lerBossTudo()[slug] || { sessionId: null, mensagens: [] };
-const salvarBoss = (slug, b) => { const t = lerBossTudo(); t[slug] = b; writeFileSync(BOSS, JSON.stringify(t, null, 2)); };
+// UM CHEFE-DOS-CHEFES: um boss só, com sessão dedicada (contexto cresce/persiste), que conhece
+// TODOS os projetos (inclusive os novos) e despacha pra qualquer um. Você diz "melhora X no TMS"
+// ou "cria Y no cockpit" e ELE roteia — pela aba em que você está (dica) ou pelo que você disser.
+const BOSS = resolve(RAIZ, ".herdr-obra-boss.json"); // { sessionId, mensagens: [{de,texto,anexos,em}] }
+const lerBoss = () => { try { const b = JSON.parse(readFileSync(BOSS, "utf8")); return (b && Array.isArray(b.mensagens)) ? b : { sessionId: null, mensagens: [] }; } catch { return { sessionId: null, mensagens: [] }; } };
+const salvarBoss = (b) => writeFileSync(BOSS, JSON.stringify(b, null, 2));
 
 // Arquivos que o dono anexa no chat do Boss. Ficam FORA do worktree de qualquer missão (isto
 // aqui é a raiz do cockpit, não um projeto-alvo) — mas ainda assim gitignorados (.herdr-obra*),
@@ -412,34 +407,38 @@ function salvarAnexo({ nome, dados }) {
   return { caminho, nome: limpo, tamanho: buf.length };
 }
 
-/** O prompt do chefe DESTE projeto — ele despacha só pra ele; se for de outro, avisa. */
-function bossPrompt(proj) {
-  const outros = projetosDisponiveis().filter((p) => p.slug !== proj.slug).map((p) => `${p.slug} (${p.nome})`).join(", ");
+/**
+ * O prompt do CHEFE-DOS-CHEFES: conhece todos os projetos e roteia. `dica` é o projeto da aba
+ * em que o dono está — o default quando ele não disser a qual projeto a tarefa pertence.
+ */
+function bossPrompt(dica) {
+  const lista = projetosDisponiveis().map((p) => `- ${p.slug} (${p.nome}) → ${p.dir}`).join("\n");
   return [
-    `Você é o BOSS do projeto ${proj.nome} (${proj.slug}), falando com o Gilvane no cockpit.`,
-    "Você está DENTRO do repositório deste projeto — leia o CLAUDE.md e a pasta memory/ dele quando precisar de contexto (tem as regras da casa).",
-    "Você COORDENA um time (engenheiro→QA→revisor→PR) que roda NESTE projeto.",
+    "Você é o CHEFE-DOS-CHEFES da obra do Gilvane, falando com ele no cockpit.",
+    "Você conhece TODOS os projetos e COORDENA um time (engenheiro→QA→revisor→PR) que roda em qualquer um deles:",
+    lista,
+    "Pode ler o CLAUDE.md e a pasta memory/ de qualquer projeto (use Read no caminho acima) quando precisar de contexto.",
     "REGRA DE ROTEAMENTO (você decide, não pergunte toda vez):",
     "- Tarefa de CÓDIGO fechada (feature, fix, teste) que vira PR → DESPACHE terminando a resposta",
-    `  com um marcador em UMA linha: [MISSAO: ${proj.slug} | <objetivo claro e completo>].`,
+    "  com um marcador em UMA linha: [MISSAO: <slug-do-projeto-certo> | <objetivo claro e completo>].",
+    "- Escolha o projeto pelo que o dono disser; se ele NÃO disser, assuma o projeto da aba atual: " + (dica || "(nenhuma)") + ".",
     "- Dúvida, conversa, arquitetura, algo rápido → responda você mesmo, curto, sem marcador.",
-    outros ? `Se a tarefa for claramente de OUTRO projeto (${outros}), AVISE em vez de despachar aqui.` : "",
-    "Antes do marcador, escreva 1-2 linhas dizendo o que vai despachar.",
+    "Antes do marcador, escreva 1-2 linhas dizendo o que vai despachar e pra qual projeto.",
     "Quando a mensagem trouxer 'Arquivos anexados pelo dono', são caminhos locais no disco —",
     "leia com Read se o conteúdo importar para a resposta ou para o objetivo que vai despachar.",
     "Seja conciso e direto, em português do Brasil. Não invente número nem promessa.",
-  ].filter(Boolean).join("\n");
+  ].join("\n");
 }
 
-/** Roda o Claude como chefe do projeto (assíncrono). cwd = pasta do projeto → lê o CLAUDE.md dele. */
-function rodarBoss(mensagem, sessionId, proj) {
+/** Roda o Claude como chefe-dos-chefes (assíncrono, não trava o event loop). */
+function rodarBoss(mensagem, sessionId, dica) {
   return new Promise((ok) => {
-    const args = ["-p", mensagem, "--append-system-prompt", bossPrompt(proj),
+    const args = ["-p", mensagem, "--append-system-prompt", bossPrompt(dica),
       "--allowedTools", "Read,Grep,Glob", "--model", "sonnet",
       "--output-format", "stream-json", "--verbose"];
     if (sessionId) args.push("--resume", sessionId);
     let buf = "";
-    const cp = spawn("claude", args, { cwd: proj.dir, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    const cp = spawn("claude", args, { cwd: RAIZ, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     cp.stdout.on("data", (d) => { buf += d; });
     cp.stderr.on("data", (d) => { buf += d; });
     cp.on("error", () => ok({ texto: "(não consegui falar com o Boss — o CLI do Claude está no PATH?)", sessionId }));
@@ -457,10 +456,9 @@ function rodarBoss(mensagem, sessionId, proj) {
   });
 }
 
-/** Uma mensagem do dono → resposta do chefe DO PROJETO (+ despacho se ele decidir que é obra). */
-async function bossChat(mensagem, anexos, projeto) {
-  const proj = acharProjeto(projeto) || projetosDisponiveis()[0];
-  if (!proj) throw new Error("nenhum projeto disponível");
+/** Uma mensagem do dono → resposta do chefe-dos-chefes (+ despacho se ele decidir que é obra). */
+async function bossChat(mensagem, anexos, projetoDica) {
+  const dica = (acharProjeto(projetoDica) || {}).slug || null; // aba atual = default de roteamento
   const msg = String(mensagem || "").trim();
   // Só aceita anexo que a GENTE salvou em /boss/anexo (caminho dentro de ANEXOS) — senão a
   // mensagem viraria uma porta para mandar o Boss (que tem Read) ler qualquer arquivo do disco.
@@ -470,14 +468,14 @@ async function bossChat(mensagem, anexos, projeto) {
     .filter((a) => a.caminho.startsWith(ANEXOS + "/") && existsSync(a.caminho));
   if (!msg && !validos.length) throw new Error("escreva a mensagem ou anexe um arquivo");
   if (msg.length > 4000) throw new Error("mensagem grande demais");
-  const b = lerBoss(proj.slug);
+  const b = lerBoss();
   b.mensagens.push({ de: "voce", texto: msg, anexos: validos, em: new Date().toISOString() });
 
   const paraBoss = msg + (validos.length
     ? (msg ? "\n\n" : "") + "Arquivos anexados pelo dono:\n" +
       validos.map((a) => `- ${a.nome}: ${a.caminho}`).join("\n")
     : "");
-  const r = await rodarBoss(paraBoss, b.sessionId, proj);
+  const r = await rodarBoss(paraBoss, b.sessionId, dica);
   if (r.sessionId) b.sessionId = r.sessionId; // fixa a sessão dedicada na 1ª resposta
 
   // O Boss decidiu despachar? [MISSAO: slug | objetivo]
@@ -498,7 +496,7 @@ async function bossChat(mensagem, anexos, projeto) {
 
   b.mensagens.push({ de: "boss", texto, em: new Date().toISOString() });
   b.mensagens = b.mensagens.slice(-60); // guarda as últimas 60 na tela (a sessão do Claude tem o resto)
-  salvarBoss(proj.slug, b);
+  salvarBoss(b);
   return { resposta: texto };
 }
 
@@ -774,7 +772,9 @@ function pintarAbas(){
     '<button class="aba'+(p.slug===projeto?" on":"")+'" data-p="'+esc(p.slug)+'">'+esc(p.nome)+'</button>').join("");
   document.querySelectorAll(".abas .aba").forEach(b=>b.onclick=()=>{
     projeto=b.dataset.p; document.querySelectorAll(".abas .aba").forEach(x=>x.classList.toggle("on",x===b));
-    if(document.getElementById("chat").classList.contains("on")) abrirChat(); // troca pro chefe do projeto
+    // as abas seguem sendo a lista de projetos + o alvo do "Acionar time"; pro chefe-dos-chefes
+    // a aba é só a DICA de roteamento (default quando você não diz o projeto).
+    const bt=document.getElementById("chatProj"); if(bt) bt.textContent="chefe-dos-chefes · aba: "+((PROJETOS.find(p=>p.slug===projeto)||{}).nome||projeto);
   });
 }
 pintarAbas();
@@ -948,10 +948,10 @@ function pintarChat(msgs){
 }
 async function abrirChat(){
   chat.classList.add("on");
-  // chefe DO projeto selecionado — cabeçalho e histórico são daquele projeto
+  // UM chefe-dos-chefes: conhece todos os projetos; a aba atual é só a dica de roteamento
   const nome=(PROJETOS.find(p=>p.slug===projeto)||{}).nome||projeto||"";
-  document.getElementById("chatProj").textContent="chefe de "+nome+" · sessão dedicada";
-  try{ pintarChat((await (await fetch("/boss/historico?projeto="+encodeURIComponent(projeto))).json()).mensagens); }catch{}
+  document.getElementById("chatProj").textContent="chefe-dos-chefes · aba: "+nome;
+  try{ pintarChat((await (await fetch("/boss/historico")).json()).mensagens); }catch{}
   document.getElementById("chatobj").focus();
 }
 document.getElementById("btBoss").onclick=abrirChat;
@@ -1081,10 +1081,7 @@ createServer(async (req, res) => {
   }
   if (req.url === "/retrato") return json(200, retrato());
   if (req.url === "/projetos/candidatos") return json(200, { candidatos: reposCandidatos() });
-  if (req.url.startsWith("/boss/historico")) {
-    const slug = new URL(req.url, "http://x").searchParams.get("projeto") || (projetosDisponiveis()[0] || {}).slug;
-    return json(200, { mensagens: lerBoss(slug).mensagens.slice(-60) });
-  }
+  if (req.url.startsWith("/boss/historico")) return json(200, { mensagens: lerBoss().mensagens.slice(-60) });
   if (req.method === "POST" && req.url === "/boss/chat") {
     try { const c = await lerCorpo(req, 8192); return json(200, await bossChat(c.mensagem, c.anexos, c.projeto)); }
     catch (e) { return json(400, { erro: e.message }); }
