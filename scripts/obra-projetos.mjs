@@ -27,6 +27,7 @@ const BUILTIN = [
     slug: "querofretes-ofc",
     nome: "QueroFretes",
     dir: resolve(DEV, "querofretes-ofc"),
+    url: "https://querofretes.com.br", // "ver sistema" abre isto no navegador
     palavras: ["frete", "motorista", "embarcador", "agregamento", "rota cheia", "proposta",
       "assinatura", "abacatepay", "sos estrada", "fornecedor", "documento do motorista",
       "cotacao", "cotação", "veiculo", "veículo", "crm", "campanha", "nota fiscal", "nfse"],
@@ -100,6 +101,22 @@ export function reposCandidatos() {
     .map((n) => resolve(DEV, n))
     .filter((dir) => !registrados.has(dir) && existsSync(resolve(dir, ".git")))
     .map((dir) => ({ dir, nome: basename(dir) }));
+}
+
+/**
+ * Grava a URL do "ver sistema" de um projeto (o site/dev server que o botão abre no navegador).
+ * Persiste como override no `.herdr-obra-projetos.json` — vale tanto para built-in (QueroFretes)
+ * quanto para projeto adicionado pelo dono. URL vazia LIMPA a que existia.
+ */
+export function definirUrlProjeto(slug, url) {
+  const proj = acharProjeto(slug);
+  if (!proj) throw new Error("projeto não encontrado");
+  const limpa = String(url || "").trim();
+  if (limpa && !/^https?:\/\//i.test(limpa)) throw new Error("a URL tem que começar com http:// ou https://");
+  const lista = lerAdicionados().filter((p) => p.slug !== slug);
+  lista.push({ slug: proj.slug, nome: proj.nome, dir: proj.dir, palavras: proj.palavras, url: limpa || undefined });
+  writeFileSync(ARQUIVO, JSON.stringify(lista, null, 2));
+  return { slug: proj.slug, nome: proj.nome, url: limpa || null };
 }
 
 export const RAIZ_DEV = DEV;

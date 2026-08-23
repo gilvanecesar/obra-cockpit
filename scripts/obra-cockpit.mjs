@@ -25,7 +25,7 @@ import { randomUUID } from "crypto";
 import { lerAtividade } from "./obra-stream.mjs";
 import {
   projetosDisponiveis, acharProjeto, conflitoDeProjeto,
-  adicionarProjeto, reposCandidatos, slugificar, RAIZ_DEV,
+  adicionarProjeto, reposCandidatos, slugificar, RAIZ_DEV, definirUrlProjeto,
 } from "./obra-projetos.mjs";
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -51,7 +51,7 @@ const PAPEIS = [
 
 // As abas de cima = os projetos que existem no disco (fonte única em obra-projetos.mjs).
 // Lista FRESCA a cada chamada — senão um projeto novo só apareceria ao reiniciar o cockpit.
-const listaProjetos = () => projetosDisponiveis().map((p) => ({ slug: p.slug, nome: p.nome }));
+const listaProjetos = () => projetosDisponiveis().map((p) => ({ slug: p.slug, nome: p.nome, url: p.url || null }));
 
 // ---- estado: a VERDADE são os arquivos de .herdr-obra-runs/ (e o legado), não a memória ----
 // Assim o cockpit vê TODA missão da obra, inclusive as lançadas por fora (obra-fluxo direto).
@@ -545,6 +545,8 @@ h1 b{color:var(--verde)}
 .aba.mais:hover{background:var(--verde);color:var(--marinho)}
 .aba.boss{color:var(--ambar);border-color:var(--ambar)}
 .aba.boss:hover{background:var(--ambar);color:var(--marinho)}
+.aba.ver{color:var(--verde);border-color:var(--verde)}
+.aba.ver:hover{background:var(--verde);color:var(--marinho)}
 #conta{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:11px;color:#6d8299;white-space:nowrap}
 #conta b{font-weight:700}
 #conta .plano{color:var(--ciano);letter-spacing:.06em}
@@ -722,6 +724,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 <header>
   <h1>COCKPIT<b>·</b>OBRA</h1>
   <div class="abas" id="abas"></div>
+  <button class="aba ver" id="btVer" title="Abrir o sistema deste projeto no navegador">🌐 ver sistema</button>
   <button class="aba mais" id="btNovo" title="Adicionar ou criar um projeto">+ novo</button>
   <button class="aba boss" id="btBoss" title="Falar com o Boss">💬 boss</button>
   <span id="conta"></span>
@@ -825,6 +828,21 @@ async function abrirModal(){
   modal.classList.add("on");
 }
 document.getElementById("btNovo").onclick=abrirModal;
+// "ver sistema": abre no navegador o site/dev-server do projeto da aba atual.
+// Sem URL cadastrada, pergunta uma vez e guarda (o retrato confirma no próximo tick).
+document.getElementById("btVer").onclick=()=>{
+  const p=PROJETOS.find(x=>x.slug===projeto)||{};
+  let url=p.url;
+  if(!url){
+    url=prompt("URL do sistema de "+(p.nome||projeto)+" (ex.: https://querofretes.com.br ou http://localhost:5050):","https://");
+    if(!url) return;
+    url=url.trim();
+    if(url.indexOf("http://")!==0 && url.indexOf("https://")!==0){ alert("A URL tem que comecar com http:// ou https://"); return; }
+    p.url=url;
+    fetch("/projetos/url",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug:projeto,url:url})}).catch(function(){});
+  }
+  window.open(url,"_blank"); // aberto DENTRO do clique → sem bloqueio de pop-up
+};
 document.getElementById("cancelar").onclick=()=>modal.classList.remove("on");
 modal.onclick=e=>{ if(e.target===modal) modal.classList.remove("on"); };
 document.querySelectorAll("#modo button").forEach(b=>b.onclick=()=>{
@@ -1231,6 +1249,11 @@ createServer(async (req, res) => {
   }
   if (req.method === "POST" && req.url === "/projetos") {
     try { return json(201, novoProjeto(await lerCorpo(req))); }
+    catch (e) { return json(400, { erro: e.message }); }
+  }
+  // grava a URL do "ver sistema" de um projeto (o botão 🌐 do header)
+  if (req.method === "POST" && req.url === "/projetos/url") {
+    try { const { slug, url } = await lerCorpo(req); return json(200, definirUrlProjeto(slug, url)); }
     catch (e) { return json(400, { erro: e.message }); }
   }
   /**
