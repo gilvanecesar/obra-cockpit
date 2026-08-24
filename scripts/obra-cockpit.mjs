@@ -1231,7 +1231,7 @@ header a{margin-left:auto;color:${AMBAR};text-decoration:none;font-size:11px;let
 </style></head><body>
 <header><h1>📊 FLUXO DA OBRA</h1><span class="sub" id="sub">o processo e as tarefas ao vivo</span><a href="/">← painel</a></header>
 <div class="wrap">
-  <svg class="proc" id="proc" viewBox="0 0 1140 126" preserveAspectRatio="xMidYMid meet"></svg>
+  <svg class="proc" id="proc" viewBox="0 0 1140 152" preserveAspectRatio="xMidYMid meet"></svg>
   <div class="cols" id="cols"></div>
 </div>
 <script>
@@ -1267,18 +1267,19 @@ function chip(m,tipo){
 }
 function pintarProc(cont){
   const S=1140/6, cx=i=>Math.round(S*(i+0.5)); // centro de cada uma das 6 colunas
-  const CY=52, R=25; // quadrado 50×50 centrado no eixo de cada coluna
+  const CY=78, R=34; // quadrados MAIORES (68×68), centrados no eixo de cada coluna
   let s="";
   for(let i=0;i<5;i++) s+='<line x1="'+(cx(i)+R)+'" y1="'+CY+'" x2="'+(cx(i+1)-R)+'" y2="'+CY+'" stroke="#3a5670" stroke-width="2" marker-end="url(#fa)"/>';
-  s+='<path d="M'+cx(3)+' '+(CY-R)+' C '+cx(3)+' 8,'+cx(1)+' 8,'+cx(1)+' '+(CY-R)+'" fill="none" stroke="${VERM}" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#fr)"/>';
-  s+='<text class="plooplb" x="'+cx(2)+'" y="18">reprovou → volta pro Engenheiro</text>';
+  // seta de retorno Rev→Eng por cima; o rótulo fica ACIMA do arco, então não se cruzam
+  s+='<path d="M'+cx(3)+' '+(CY-R)+' C '+cx(3)+' 26,'+cx(1)+' 26,'+cx(1)+' '+(CY-R)+'" fill="none" stroke="${VERM}" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#fr)"/>';
+  s+='<text class="plooplb" x="'+cx(2)+'" y="14">reprovou → volta pro Engenheiro</text>';
   COLS.forEach((c,i)=>{
     const on=(cont[c.k]||0)>0, X=cx(i);
     s+='<rect class="pnode'+(on?" on":"")+'" x="'+(X-R)+'" y="'+(CY-R)+'" width="'+(2*R)+'" height="'+(2*R)+'"/>';
-    s+='<text x="'+X+'" y="'+CY+'" text-anchor="middle" dominant-baseline="central" style="font-size:22px">'+c.e+'</text>';
-    s+='<text class="plabel" x="'+X+'" y="'+(CY+R+17)+'">'+c.n+'</text>';
-    s+=on?'<text class="pcount" x="'+X+'" y="'+(CY+R+31)+'">'+cont[c.k]+' tarefa'+(cont[c.k]>1?"s":"")+'</text>'
-        :'<text class="pdesc" x="'+X+'" y="'+(CY+R+30)+'">'+c.d+'</text>';
+    s+='<text x="'+X+'" y="'+CY+'" text-anchor="middle" dominant-baseline="central" style="font-size:28px">'+c.e+'</text>';
+    s+='<text class="plabel" x="'+X+'" y="'+(CY+R+18)+'">'+c.n+'</text>';
+    s+=on?'<text class="pcount" x="'+X+'" y="'+(CY+R+32)+'">'+cont[c.k]+' tarefa'+(cont[c.k]>1?"s":"")+'</text>'
+        :'<text class="pdesc" x="'+X+'" y="'+(CY+R+31)+'">'+c.d+'</text>';
   });
   s+='<defs><marker id="fa" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="#3a5670"/></marker>'+
      '<marker id="fr" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="${VERM}"/></marker></defs>';
