@@ -208,6 +208,13 @@ function gastoObra(dias = 14) {
   return { linhas, pico, total };
 }
 
+// ---- "Boss (direto)": trabalho que o EU faz direto (não via crew) aparece no painel ----
+const DIRETOS = resolve(RAIZ, ".herdr-obra-diretos.json");
+const lerDiretos = () => { try { const a = JSON.parse(readFileSync(DIRETOS, "utf8")); return Array.isArray(a) ? a : []; } catch { return []; } };
+const salvarDiretos = (a) => writeFileSync(DIRETOS, JSON.stringify(a.slice(-30), null, 2));
+// só os que interessam: trabalhando + os que terminaram nos últimos 90s
+const diretosVivos = () => lerDiretos().filter((d) => d.status !== "terminou" || (d.fim && Date.now() - new Date(d.fim).getTime() < 90000));
+
 // ---- status do hardware do saturno (a máquina onde o cockpit roda) ----
 // Lê /proc (CPU/RAM, instantâneo) e nvidia-smi (GPU, async). Cache de ~3s pra não spammar.
 let maquinaCache = null;
@@ -254,6 +261,7 @@ function retrato() {
     gasto: gastoObra(14),
     conta,
     maquina: maquinaCache,
+    diretos: diretosVivos(),
     em: new Date().toISOString(),
   };
 }
@@ -696,6 +704,9 @@ h1 b{color:var(--ciano)}
 .missoes{padding:12px 24px 20px;display:flex;flex-direction:column;gap:14px}
 .mcard{border:1px solid var(--linha);background:var(--painel)}
 .mcard.rodando{border-color:var(--ciano)}
+.mcard.direto{border-left:3px solid var(--ciano)}
+.mhead .proj.bossdir{color:var(--ciano);border-color:var(--ciano);font-weight:700}
+.datv{padding:10px 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
 .mhead{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
 .mhead .proj{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ciano);border:1px solid var(--linha);padding:2px 8px}
 .mhead .obj{flex:1 1 260px;color:var(--gelo);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1006,6 +1017,19 @@ function missaoCard(m){
     '<div class="roles">'+m.paineis.map(role).join("")+'</div></div>';
 }
 
+// Card do "Boss (direto)": trabalho que o EU faz na mão, não via crew — pra também aparecer no painel
+function diretoCard(d){
+  const fim=d.status==="terminou";
+  return '<div class="mcard direto'+(fim?"":" rodando")+'">'+
+    '<div class="mhead"><span class="proj bossdir">BOSS · DIRETO</span>'+
+      (d.projeto?'<span class="proj">'+esc(d.projeto)+'</span>':'')+
+      '<span class="obj">'+esc(d.titulo)+'</span>'+
+      '<span class="badge '+(fim?"b-off":"b-on")+'">'+(fim?"feito":"trabalhando")+'</span>'+
+      '<span class="custo">'+quando(d.comecou)+'</span></div>'+
+    ((d.resultado||d.atividade)?'<div class="datv">'+esc(d.resultado||d.atividade)+'</div>':'')+
+    '</div>';
+}
+
 function quando(iso){ if(!iso) return ""; const m=Math.floor((Date.now()-new Date(iso))/60000);
   return m<1?"agora":m<60?"há "+m+"min":m<1440?"há "+Math.floor(m/60)+"h":"há "+Math.floor(m/1440)+"d"; }
 
@@ -1100,8 +1124,11 @@ function render(d){
   const cheio=d.ativas>=d.max;
   document.getElementById("rodar").disabled=cheio;
   document.getElementById("cap").textContent=d.ativas?(d.ativas+"/"+d.max+" rodando"):"";
-  document.getElementById("missoes").innerHTML = (d.missoes&&d.missoes.length)
-    ? d.missoes.map(missaoCard).join("")
+  const cards=[];
+  if(d.diretos&&d.diretos.length) cards.push(d.diretos.map(diretoCard).join(""));
+  if(d.missoes&&d.missoes.length) cards.push(d.missoes.map(missaoCard).join(""));
+  document.getElementById("missoes").innerHTML = cards.length
+    ? cards.join("")
     : '<div class="vazio"><b>Nenhuma missão ainda</b>escreva o objetivo acima e acione o time — pode mandar várias</div>';
   const hist=d.historico||[];
   document.getElementById("hsec").style.display=hist.length?"block":"none";
@@ -1493,6 +1520,29 @@ createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/projetos/url") {
     try { const { slug, url } = await lerCorpo(req); return json(200, definirUrlProjeto(slug, url)); }
     catch (e) { return json(400, { erro: e.message }); }
+  }
+  // "Boss (direto)": o EU registra trabalho direto aqui → vira card no painel.
+  // sem id = cria (devolve o id); com id = atualiza (status "terminou" fecha o card).
+  if (req.method === "POST" && req.url === "/direto") {
+    try {
+      const b = await lerCorpo(req);
+      const lista = lerDiretos();
+      const nowISO = new Date().toISOString();
+      if (b.id) {
+        const d = lista.find((x) => x.id === b.id);
+        if (d) {
+          if (b.status) d.status = b.status;
+          if (b.status === "terminou") d.fim = nowISO;
+          if (b.atividade != null) d.atividade = String(b.atividade).slice(0, 200);
+          if (b.resultado != null) d.resultado = String(b.resultado).slice(0, 500);
+        }
+        salvarDiretos(lista); return json(200, d || {});
+      }
+      const d = { id: "d" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+        titulo: String(b.titulo || "(sem título)").slice(0, 200), projeto: b.projeto ? String(b.projeto).slice(0, 40) : null,
+        status: "trabalhando", atividade: b.atividade ? String(b.atividade).slice(0, 200) : null, comecou: nowISO };
+      lista.push(d); salvarDiretos(lista); return json(201, d);
+    } catch (e) { return json(400, { erro: e.message }); }
   }
   /**
    * SSE: em vez de a tela perguntar de 1,5s em 1,5s, o servidor EMPURRA o retrato ~1×/s.
