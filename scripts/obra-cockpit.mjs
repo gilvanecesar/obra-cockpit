@@ -667,6 +667,13 @@ h1 b{color:var(--verde)}
 .role .rp{margin-top:auto;display:flex;gap:8px;font-size:10px;color:#6d8299}
 .role .rp .cu{margin-left:auto;color:var(--verde)}
 @media(max-width:720px){.roles{grid-template-columns:repeat(2,1fr)}}
+/* mini-grafo do pipeline (Eng→QA→Rev→PR) no topo do card */
+.mgwrap{display:flex;align-items:center;gap:10px;padding:9px 14px 3px;border-bottom:1px solid var(--linha)}
+.mgraf{height:42px;width:auto;max-width:290px;flex:0 0 auto}
+.mg-lb{fill:#6b8299;font:700 8px "SF Mono",monospace;letter-spacing:.05em;text-transform:uppercase}
+.mg-puls{animation:mgpulse 1.15s ease-in-out infinite}
+@keyframes mgpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.mground{font:700 9px "SF Mono",monospace;color:var(--verm);letter-spacing:.06em;white-space:nowrap}
 .vazio{color:#6d8299;text-align:center;padding:50px 24px}
 .vazio b{display:block;color:var(--gelo);font-size:15px;margin-bottom:6px}
 .cap{font-size:11px;color:#6d8299;margin-left:8px}
@@ -910,12 +917,39 @@ function role(p){
 }
 
 const chipTier=t=>t?'<span class="tier tier-'+esc(t)+'" title="nível escolhido pelo roteador de custo">'+esc(t)+'</span>':'';
+// mini-grafo do pipeline: 4 nós Eng→QA→Rev→PR — verde=feito, ciano pulsando=rodando,
+// vermelho=reprovado, cinza=ainda não começou; seta de retorno Rev→Eng quando reprova.
+function miniGrafo(m){
+  const st={};
+  (m.paineis||[]).forEach(function(p){
+    const rep=p.chave==="revisor"&&p.step==="terminou"&&/REPROVADO/i.test(p.resultado||"");
+    st[p.chave]=rep?"rep":(p.step==="terminou"?"ok":(p.step==="trabalhando"?"run":"wait"));
+  });
+  const cor={ok:"var(--verde)",run:"var(--ciano)",rep:"var(--verm)",wait:"#24384d"};
+  const nos=[["eng","Eng"],["qa","QA"],["revisor","Rev"],["pr","PR"]];
+  const X=[26,96,166,236], Y=22, R=9;
+  let s='<svg class="mgraf" viewBox="0 0 262 46" preserveAspectRatio="xMidYMid meet" aria-hidden="true">';
+  for(let i=0;i<3;i++) s+='<line x1="'+(X[i]+R)+'" y1="'+Y+'" x2="'+(X[i+1]-R)+'" y2="'+Y+'" stroke="var(--linha)" stroke-width="2"/>';
+  const reprovou=st.revisor==="rep";
+  if(reprovou){
+    s+='<path d="M'+X[2]+' '+(Y-R)+' C '+X[2]+' 3,'+X[0]+' 3,'+X[0]+' '+(Y-R)+'" fill="none" stroke="var(--verm)" stroke-width="1.4" stroke-dasharray="3 2"/>';
+    s+='<path d="M'+(X[0]-3)+' '+(Y-R-4)+' L'+X[0]+' '+(Y-R+1)+' L'+(X[0]+3)+' '+(Y-R-4)+'" fill="var(--verm)"/>';
+  }
+  nos.forEach(function(n,i){
+    const e=st[n[0]]||"wait";
+    s+='<circle cx="'+X[i]+'" cy="'+Y+'" r="'+R+'" fill="'+cor[e]+'"'+(e==="run"?' class="mg-puls"':'')+'/>';
+    s+='<text x="'+X[i]+'" y="'+(Y+R+11)+'" text-anchor="middle" class="mg-lb">'+n[1]+'</text>';
+  });
+  s+='</svg>';
+  return '<div class="mgwrap">'+s+(reprovou?'<span class="mground">↻ 2ª rodada</span>':'')+'</div>';
+}
 function missaoCard(m){
   return '<div class="mcard'+(m.rodando?" rodando":"")+'">'+
     '<div class="mhead"><span class="proj">'+esc(m.projeto)+'</span>'+chipTier(m.tier)+
       '<span class="obj">'+esc(m.objetivo)+'</span>'+
       '<span class="badge '+(m.rodando?"b-on":"b-off")+'">'+(m.rodando?"rodando":"encerrada")+'</span>'+
       '<span class="custo">'+dinheiro(m.custoTotal)+'</span></div>'+
+    miniGrafo(m)+
     '<div class="roles">'+m.paineis.map(role).join("")+'</div></div>';
 }
 
