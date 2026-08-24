@@ -43,7 +43,7 @@ const MAX_PARALELO = Number(process.env.OBRA_MAX_PARALELO || 4);
 
 // Paleta "herdr": carvão neutro + roxo lavanda como accent, texto quase-branco.
 // CIANO agora é o ROXO (accent primário — mantive o nome pra não trocar em 100 lugares).
-const MARINHO = "#17171a", CIANO = "#cba6f7", VERDE = "#37CF7C", GELO = "#eae8ee", AMBAR = "#e8b339", VERM = "#eb6e6e";
+const MARINHO = "#17171a", CIANO = "#cba6f7", VERDE = "#37CF7C", GELO = "#eae8ee", AMBAR = "#9399b2", VERM = "#eb6e6e";
 
 // A ordem e o rótulo dos painéis. É a linha de montagem da obra, da esquerda pra direita.
 const PAPEIS = [
@@ -548,8 +548,8 @@ h1 b{color:var(--ciano)}
 .aba.on{color:var(--marinho);background:var(--ciano);border-color:var(--ciano);font-weight:700}
 .aba.mais{color:var(--verde);border-style:dashed}
 .aba.mais:hover{background:var(--verde);color:var(--marinho)}
-.aba.boss{color:var(--ambar);border-color:var(--ambar)}
-.aba.boss:hover{background:var(--ambar);color:var(--marinho)}
+.aba.boss{color:var(--ciano);border-color:var(--ciano)}
+.aba.boss:hover{background:var(--ciano);color:var(--marinho)}
 .aba.ver{color:var(--verde);border-color:var(--verde)}
 .aba.ver:hover{background:var(--verde);color:var(--marinho)}
 .aba.fluxo{color:var(--ciano);border-color:var(--linha)}
@@ -562,13 +562,13 @@ h1 b{color:var(--ciano)}
 
 /* chat do Boss — painel inferior */
 .chat{position:fixed;bottom:0;left:0;right:0;width:100%;max-height:50vh;background:var(--painel);
- border-top:1px solid var(--ambar);display:flex;flex-direction:column;transform:translateY(100%);
+ border-top:1px solid var(--muted);display:flex;flex-direction:column;transform:translateY(100%);
  transition:transform .18s;z-index:20;
  font-family:"JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
  font-weight:300}
 .chat.on{transform:translateY(0)}
 .chatcab{padding:14px 16px;border-bottom:1px solid var(--linha);font-size:12px;letter-spacing:.14em;
- color:var(--ambar);font-weight:600;display:flex;align-items:center;gap:10px}
+ color:var(--muted);font-weight:600;display:flex;align-items:center;gap:10px}
 .chatsub{font-size:10px;letter-spacing:.06em;color:#9399b2;font-weight:300;text-transform:none}
 .chatcab button{margin-left:auto;background:transparent;border:0;color:#9399b2;cursor:pointer;font-size:16px}
 .chatmsgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:18px}
@@ -586,15 +586,15 @@ h1 b{color:var(--ciano)}
 .chatentrada{border-top:1px solid var(--linha);padding:12px;display:flex;gap:8px}
 #chatAnexar{background:transparent;border:1px solid var(--linha);color:#9399b2;cursor:pointer;
  font-size:15px;padding:0 12px;align-self:stretch}
-#chatAnexar:hover{border-color:var(--ambar);color:var(--ambar)}
+#chatAnexar:hover{border-color:var(--muted);color:var(--muted)}
 .chatentrada textarea{flex:1;min-height:44px;max-height:140px;resize:vertical;background:#1e1e22;
  border:1px solid var(--linha);color:var(--gelo);padding:10px 12px;
  font:300 13px/1.7 "JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace}
-.chatentrada textarea:focus{outline:none;border-color:var(--ambar)}
-.chatentrada button{background:transparent;border:1px solid var(--ambar);color:var(--ambar);padding:0 16px;
+.chatentrada textarea:focus{outline:none;border-color:var(--muted)}
+.chatentrada button{background:transparent;border:1px solid var(--muted);color:var(--muted);padding:0 16px;
  cursor:pointer;font:300 11px/1 "JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
  letter-spacing:.1em;text-transform:uppercase}
-.chatentrada button:hover:not(:disabled){background:var(--ambar);color:var(--marinho)}
+.chatentrada button:hover:not(:disabled){background:var(--muted);color:var(--marinho)}
 .chatentrada button:disabled{opacity:.4;cursor:default}
 
 /* modal de novo projeto */
@@ -615,7 +615,7 @@ h1 b{color:var(--ciano)}
 .mbtns .cancelar{color:#9399b2;border-color:var(--linha)}
 .mbtns .ok{color:var(--verde);border-color:var(--verde)}
 .mbtns .ok:hover{background:var(--verde);color:var(--marinho)}
-#modalAviso{font-size:11px;color:var(--ambar);margin-top:10px;min-height:0}
+#modalAviso{font-size:11px;color:var(--verm);margin-top:10px;min-height:0}
 
 /* heatmap de gasto (dia × hora) */
 .mapa{padding:0 24px 30px;overflow-x:auto}
@@ -641,7 +641,7 @@ h1 b{color:var(--ciano)}
  font:11px/1 "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;align-self:stretch}
 #rodar:hover:not(:disabled){background:var(--verde);color:var(--marinho)}
 #rodar:disabled{opacity:.4;cursor:default}
-#aviso{width:100%;font-size:11px;color:var(--ambar);min-height:0}
+#aviso{width:100%;font-size:11px;color:var(--verm);min-height:0}
 
 .e-aguardando{color:#9399b2;border-color:#9399b2}
 .e-trabalhando{color:var(--ciano);border-color:var(--ciano)}
@@ -693,8 +693,8 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#9399
 .hv-aprovado{color:var(--verde);border-color:var(--verde)}
 .hv-reprovado{color:var(--verm);border-color:var(--verm)}
 .hv-terminou{color:var(--ciano);border-color:var(--ciano)}
-.hv-falhou{color:var(--ambar);border-color:var(--ambar)}
-.hv-interrompida{color:var(--ambar);border-color:var(--ambar)}
+.hv-falhou{color:var(--verm);border-color:var(--verm)}
+.hv-interrompida{color:var(--verm);border-color:var(--verm)}
 .hrow .ho{flex:1;color:var(--gelo);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hrow .hp{color:#9399b2;flex:none}
 .hrow .hc{color:var(--verde);flex:none}
@@ -716,11 +716,11 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#9399
 .diffbox .add{color:var(--verde);background:rgba(55,207,124,.07)}
 .diffbox .del{color:var(--verm);background:rgba(235,110,110,.07)}
 .diffbox .hh{color:var(--ciano)}
-.diffbox .ff{color:var(--ambar);font-weight:700;border-top:1px solid var(--linha);margin-top:4px}
+.diffbox .ff{color:var(--muted);font-weight:700;border-top:1px solid var(--linha);margin-top:4px}
 .diffbox .dim{color:#9399b2}
 .hdet .papel{display:flex;gap:10px;align-items:baseline;border-top:1px solid #24242a;padding-top:7px}
 .hdet .papel .pn{color:var(--gelo);font-weight:700;min-width:92px}
-.hdet .papel .pm{color:var(--ambar);min-width:56px}
+.hdet .papel .pm{color:var(--muted);min-width:56px}
 .hdet .papel .pr{flex:1;color:#9399b2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .hdet .papel .pc{color:var(--verde)}
 /* chip de nível (tier) */
@@ -729,8 +729,8 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#9399
 .tier-medio{color:var(--ciano);border-color:var(--ciano)}
 .tier-pesado{color:var(--verm);border-color:var(--verm)}
 /* pergunta do conflito */
-.conflito{width:100%;background:#1a1206;border:1px solid var(--ambar);padding:12px 14px;margin-top:4px;font-size:13px;color:var(--gelo)}
-.conflito b{color:var(--ambar)}
+.conflito{width:100%;background:#201a1a;border:1px solid var(--verm);padding:12px 14px;margin-top:4px;font-size:13px;color:var(--gelo)}
+.conflito b{color:var(--verm)}
 .conflito .btns{display:flex;gap:8px;margin-top:10px}
 .conflito button{border:1px solid;background:transparent;padding:7px 14px;cursor:pointer;font:11px/1 "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase}
 .conflito .sim{color:var(--verm);border-color:var(--verm)}
@@ -1139,7 +1139,7 @@ document.getElementById("chatobj").addEventListener("keydown",e=>{ if(e.key==="E
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ chat.classList.remove("on"); modal.classList.remove("on"); } });
 
 // heatmap "onde o dinheiro queimou": dia (linha) × hora (coluna), cor pela intensidade
-const CORGASTO=["#111a26","#3a4657","#e8b339","#eb6e6e"]; // sem gasto · baixo · médio · alto
+const CORGASTO=["#111a26","#3a4657","#9399b2","#eb6e6e"]; // sem gasto · baixo · médio · alto
 function faixaGasto(v,pico){
   if(v<=0) return 0;
   if(pico<=0) return 1;
