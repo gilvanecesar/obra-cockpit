@@ -1212,7 +1212,7 @@ header a{margin-left:auto;color:${AMBAR};text-decoration:none;font-size:11px;let
 .plabel{fill:${GELO};font:700 12px "SF Mono",monospace;text-anchor:middle}
 .pdesc{fill:#6d8299;font:9px "SF Mono",monospace;text-anchor:middle;text-transform:uppercase;letter-spacing:.05em}
 .pcount{fill:${CIANO};font:700 10px "SF Mono",monospace;text-anchor:middle}
-.plooplb{fill:${VERM};font:700 9px "SF Mono",monospace;text-anchor:middle;letter-spacing:.05em}
+.plooplb{fill:${VERM};font:700 10px "SF Mono",monospace;text-anchor:middle;letter-spacing:.05em;paint-order:stroke;stroke:${MARINHO};stroke-width:4px;stroke-linejoin:round}
 .cols{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:#16283c;border:1px solid #16283c;margin-top:12px}
 .col{background:#0b1420;min-height:130px;min-width:0;display:flex;flex-direction:column}
 .colh{padding:8px 10px;border-bottom:1px solid #16283c;display:flex;align-items:center;gap:6px}
