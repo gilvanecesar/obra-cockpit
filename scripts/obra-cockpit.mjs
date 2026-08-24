@@ -208,6 +208,39 @@ function gastoObra(dias = 14) {
   return { linhas, pico, total };
 }
 
+// ---- status do hardware do saturno (a máquina onde o cockpit roda) ----
+// Lê /proc (CPU/RAM, instantâneo) e nvidia-smi (GPU, async). Cache de ~3s pra não spammar.
+let maquinaCache = null;
+function atualizarMaquina() {
+  const m = { cpu: null, mem: null, gpu: null, em: Date.now() };
+  try {
+    const load = readFileSync("/proc/loadavg", "utf8").trim().split(/\s+/);
+    const cores = (readFileSync("/proc/cpuinfo", "utf8").match(/^processor/gm) || []).length || 1;
+    const l1 = parseFloat(load[0]) || 0;
+    m.cpu = { load1: l1, cores, pct: Math.min(100, Math.round((l1 / cores) * 100)) };
+  } catch {}
+  try {
+    const mi = readFileSync("/proc/meminfo", "utf8");
+    const kb = (k) => { const x = mi.match(new RegExp("^" + k + ":\\s+(\\d+)", "m")); return x ? parseInt(x[1]) : 0; };
+    const total = kb("MemTotal"), avail = kb("MemAvailable"), used = total - avail;
+    if (total) m.mem = { usedGB: (used / 1048576).toFixed(1), totalGB: (total / 1048576).toFixed(0), pct: Math.round((used / total) * 100) };
+  } catch {}
+  if (!maquinaCache) maquinaCache = m; // já mostra CPU/RAM enquanto a GPU (async) não volta
+  execFile("nvidia-smi",
+    ["--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"],
+    { timeout: 4000 }, (e, out) => {
+      if (!e && out) {
+        const p = out.trim().split("\n")[0].split(",").map((s) => s.trim());
+        const n = (v) => (/^\d+$/.test(v) ? parseInt(v) : null);
+        m.gpu = { nome: (p[0] || "GPU").replace("NVIDIA GeForce ", ""), util: n(p[1]), memUsed: n(p[2]), memTotal: n(p[3]), temp: n(p[4]),
+          aviso: /reset|error/i.test(out) ? "requer reset" : (p[1] && p[1].includes("N/A") ? "leitura parcial" : null) };
+      }
+      maquinaCache = m; // fixa o retrato completo (com GPU, ou sem se deu erro)
+    });
+}
+atualizarMaquina();
+setInterval(atualizarMaquina, 3000);
+
 /** O retrato de agora: TODAS as missões (de qualquer porta) + histórico. */
 function retrato() {
   const missoes = arquivosDeRun().map(missaoDeArquivo).filter(Boolean)
@@ -220,6 +253,7 @@ function retrato() {
     historico: lerMissoes().slice(0, 12),
     gasto: gastoObra(14),
     conta,
+    maquina: maquinaCache,
     em: new Date().toISOString(),
   };
 }
@@ -559,6 +593,14 @@ h1 b{color:var(--ciano)}
 #conta .plano{color:var(--ciano);letter-spacing:.06em}
 #relogio{font-size:11px;color:#9399b2}
 #ver{font-size:10px;color:var(--verde);border:1px solid var(--linha);padding:2px 7px;letter-spacing:.06em}
+.maquina{display:flex;gap:22px;align-items:center;flex-wrap:wrap;padding:9px 24px;border-bottom:1px solid var(--linha);font-size:11px}
+.maquina .mqhost{color:var(--ciano);letter-spacing:.1em;font-weight:700;text-transform:uppercase}
+.mqcell{display:flex;flex-direction:column;gap:3px;min-width:130px}
+.mql{color:var(--muted);letter-spacing:.04em}
+.mqv{color:var(--gelo)}
+.mqw{color:var(--verm);text-transform:uppercase;font-size:9px;letter-spacing:.08em}
+.mqbar{display:block;height:3px;background:#2a2a30;width:100%;margin-top:1px}
+.mqbar>span{display:block;height:100%}
 
 /* chat do Boss — painel inferior */
 .chat{position:fixed;bottom:0;left:0;right:0;width:100%;max-height:50vh;background:var(--painel);
@@ -747,6 +789,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#9399
   <span id="conta"></span>
   <span id="relogio"></span>
 </header>
+<div class="maquina" id="maquina"></div>
 <div class="chat" id="chat">
   <div class="chatcab">💬 BOSS <span class="chatsub" id="chatProj">sessão dedicada · conhece o projeto</span>
     <button id="chatJanela" title="Abrir em janela inteira (outra aba)" onclick="window.open('/chat','_blank')">⛶</button>
@@ -1032,10 +1075,28 @@ function pintarConta(c,g){
     '<span>obra hoje <b style="color:var(--verde)">'+dinheiro(hoje)+'</b></span>'+
     '<span>14d <b style="color:var(--verde)">'+dinheiro(g&&g.total)+'</b></span>';
 }
+// painel de hardware do saturno (GPU/CPU/RAM) — barras finas, roxo/verde
+function pintarMaquina(m){
+  const el=document.getElementById("maquina"); if(!el) return;
+  if(!m || (!m.cpu && !m.mem && !m.gpu)){ el.style.display="none"; return; } // sem /proc/nvidia (ex.: Mac) → esconde
+  el.style.display="flex";
+  const bar=(pct,cor)=>'<span class="mqbar"><span style="width:'+Math.max(2,Math.min(100,pct||0))+'%;background:'+cor+'"></span></span>';
+  let g;
+  if(m.gpu){
+    const av=m.gpu.aviso?' <b class="mqw">'+esc(m.gpu.aviso)+'</b>':'';
+    const vpct=m.gpu.memTotal?Math.round(m.gpu.memUsed/m.gpu.memTotal*100):0;
+    g='<div class="mqcell"><span class="mql">GPU · '+esc(m.gpu.nome)+av+'</span>'+
+      '<span class="mqv">'+(m.gpu.util!=null?m.gpu.util+"% uso":"—")+(m.gpu.temp!=null?" · "+m.gpu.temp+"°C":"")+' · VRAM '+(m.gpu.memUsed||0)+"/"+(m.gpu.memTotal||0)+'MB</span>'+bar(vpct,"var(--ciano)")+'</div>';
+  } else g='<div class="mqcell"><span class="mql">GPU</span><span class="mqv">sem leitura</span></div>';
+  const cpu=m.cpu?'<div class="mqcell"><span class="mql">CPU · '+m.cpu.cores+' cores</span><span class="mqv">carga '+m.cpu.load1.toFixed(2)+" · "+m.cpu.pct+'%</span>'+bar(m.cpu.pct,"var(--verde)")+'</div>':'';
+  const mem=m.mem?'<div class="mqcell"><span class="mql">RAM</span><span class="mqv">'+m.mem.usedGB+" / "+m.mem.totalGB+" GB · "+m.mem.pct+'%</span>'+bar(m.mem.pct,"var(--verde)")+'</div>':'';
+  el.innerHTML='<span class="mqhost">🖥️ saturno</span>'+g+cpu+mem;
+}
 function render(d){
   if(d.projetos){ PROJETOS=d.projetos; pintarAbas(); }   // projeto novo aparece na aba sem recarregar
   document.getElementById("relogio").textContent=new Date(d.em).toLocaleTimeString("pt-BR");
   pintarConta(d.conta, d.gasto);
+  pintarMaquina(d.maquina);
   const cheio=d.ativas>=d.max;
   document.getElementById("rodar").disabled=cheio;
   document.getElementById("cap").textContent=d.ativas?(d.ativas+"/"+d.max+" rodando"):"";
