@@ -29,6 +29,8 @@ import {
 } from "./obra-projetos.mjs";
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Versão vem do package.json (fonte única) — mostrada no header pra confirmar o deploy no ar.
+const VERSAO = (() => { try { return JSON.parse(readFileSync(resolve(RAIZ, "package.json"), "utf8")).version; } catch { return "?"; } })();
 const MISSOES = resolve(RAIZ, ".herdr-obra-missoes.json"); // histórico das missões encerradas
 // Cada missão paralela grava num arquivo PRÓPRIO aqui — status central único faria as
 // missões se atropelarem (uma sobrescrevendo o painel da outra).
@@ -553,6 +555,7 @@ h1 b{color:var(--verde)}
 #conta b{font-weight:700}
 #conta .plano{color:var(--ciano);letter-spacing:.06em}
 #relogio{font-size:11px;color:#6d8299}
+#ver{font-size:10px;color:var(--verde);border:1px solid var(--linha);padding:2px 7px;letter-spacing:.06em}
 
 /* chat do Boss — painel inferior */
 .chat{position:fixed;bottom:0;left:0;right:0;width:100%;max-height:50vh;background:var(--painel);
@@ -738,6 +741,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
   <button class="aba mais" id="btNovo" title="Adicionar ou criar um projeto">+ novo</button>
   <button class="aba boss" id="btBoss" title="Falar com o Boss">💬 boss</button>
   <span id="conta"></span>
+  <span id="ver" title="versão do cockpit no ar">v${VERSAO}</span>
   <span id="relogio"></span>
 </header>
 <div class="chat" id="chat">

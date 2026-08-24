@@ -1,6 +1,6 @@
 {
   "name": "obra-cockpit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Cockpit da obra — um time de agentes (engenheiro→QA→revisor→PR) que trabalha nos seus projetos, com painel no navegador e chat do Boss.",
