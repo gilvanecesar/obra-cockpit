@@ -547,6 +547,8 @@ h1 b{color:var(--verde)}
 .aba.boss:hover{background:var(--ambar);color:var(--marinho)}
 .aba.ver{color:var(--verde);border-color:var(--verde)}
 .aba.ver:hover{background:var(--verde);color:var(--marinho)}
+.aba.fluxo{color:var(--ciano);border-color:var(--linha)}
+.aba.fluxo:hover{border-color:var(--ciano)}
 #conta{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:11px;color:#6d8299;white-space:nowrap}
 #conta b{font-weight:700}
 #conta .plano{color:var(--ciano);letter-spacing:.06em}
@@ -731,6 +733,7 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 <header>
   <h1>COCKPIT<b>·</b>OBRA</h1>
   <div class="abas" id="abas"></div>
+  <button class="aba fluxo" id="btFluxo" title="Ver o grafo do processo e o fluxo das tarefas" onclick="window.open('/fluxo','_blank')">📊 fluxo</button>
   <button class="aba ver" id="btVer" title="Abrir o sistema deste projeto no navegador">🌐 ver sistema</button>
   <button class="aba mais" id="btNovo" title="Adicionar ou criar um projeto">+ novo</button>
   <button class="aba boss" id="btBoss" title="Falar com o Boss">💬 boss</button>
@@ -1191,6 +1194,114 @@ setInterval(()=>{ if(Date.now()-ultimoUpdate>=4000) puxar(); },2000); // cão-de
  * é nova, então não há lógica de Boss duplicada. É o chefe-dos-chefes (roteia por projeto pelo
  * que você disser; sem abas aqui, não manda dica).
  */
+// PÁGINA INTEIRA (/fluxo): o grafo do PROCESSO no topo + as TAREFAS fluindo por estágio ao vivo.
+// Autossuficiente (lê só /retrato, sem endpoint novo). Não toca no grid — página à parte.
+const FLUXO_PAGE = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Fluxo da Obra</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:${MARINHO};color:${GELO};font:14px/1.5 "SF Mono",Menlo,ui-monospace,monospace;min-height:100vh}
+header{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid #16283c}
+header h1{font-size:14px;letter-spacing:.2em;color:${CIANO};font-weight:700}
+header .sub{font-size:11px;color:#6d8299}
+header a{margin-left:auto;color:${AMBAR};text-decoration:none;font-size:11px;letter-spacing:.08em;border:1px solid #23384d;padding:5px 12px}
+.wrap{max-width:1120px;margin:0 auto;padding:18px 22px 44px}
+.proc{width:100%;height:auto;margin-bottom:6px}
+.pnode{fill:#0b1420;stroke:#23384d;stroke-width:1.5}
+.pnode.on{stroke:${CIANO};stroke-width:2.5}
+.plabel{fill:${GELO};font:700 12px "SF Mono",monospace;text-anchor:middle}
+.pdesc{fill:#6d8299;font:9px "SF Mono",monospace;text-anchor:middle;text-transform:uppercase;letter-spacing:.05em}
+.pcount{fill:${CIANO};font:700 10px "SF Mono",monospace;text-anchor:middle}
+.plooplb{fill:${VERM};font:700 9px "SF Mono",monospace;text-anchor:middle;letter-spacing:.05em}
+.cols{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:#16283c;border:1px solid #16283c;margin-top:12px}
+.col{background:#0b1420;min-height:130px;display:flex;flex-direction:column}
+.colh{padding:8px 10px;border-bottom:1px solid #16283c;display:flex;align-items:center;gap:6px}
+.colh .e{font-size:15px}.colh .n{font-size:11px;font-weight:700;color:${GELO}}
+.colh .c{margin-left:auto;font-size:10px;color:${CIANO}}
+.colbody{padding:8px;display:flex;flex-direction:column;gap:7px;flex:1}
+.chip{background:#12202f;border:1px solid #23384d;border-left:3px solid ${CIANO};padding:7px 8px;font-size:11px}
+.chip.done{border-left-color:${VERDE}}.chip.rep{border-left-color:${VERM}}.chip.dead{border-left-color:#54708a}
+.chip .p{color:${CIANO};font-size:9px;letter-spacing:.07em;text-transform:uppercase}
+.chip .o{color:${GELO};display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:2px 0}
+.chip .m{display:flex;gap:8px;color:#6d8299;font-size:10px}
+.chip .m .cu{margin-left:auto;color:${VERDE}}
+.chip a{color:${CIANO};text-decoration:none}
+.empty{color:#33485e;font-size:11px;padding:12px;text-align:center}
+@media(max-width:820px){.cols{grid-template-columns:repeat(2,1fr)}.proc{display:none}}
+</style></head><body>
+<header><h1>📊 FLUXO DA OBRA</h1><span class="sub" id="sub">o processo e as tarefas ao vivo</span><a href="/">← painel</a></header>
+<div class="wrap">
+  <svg class="proc" id="proc" viewBox="0 0 920 148" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="cols" id="cols"></div>
+</div>
+<script>
+const COLS=[
+ {k:"despacho",e:"📥",n:"Despacho",d:"fila / acionado"},
+ {k:"eng",e:"🔧",n:"Engenheiro",d:"implementa"},
+ {k:"qa",e:"🧪",n:"QA",d:"tenta quebrar"},
+ {k:"revisor",e:"🔍",n:"Revisor",d:"aprova/reprova"},
+ {k:"pr",e:"🚀",n:"PR",d:"abre o PR"},
+ {k:"feito",e:"✅",n:"Feito",d:"entregue"}
+];
+const esc=s=>String(s==null?"":s).replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const din=v=>v==null?"—":"US$ "+Number(v).toFixed(2);
+function estagio(m){
+  if(!m.rodando) return "feito";
+  const w=(m.paineis||[]).find(p=>p.step==="trabalhando");
+  if(w) return w.chave;
+  const algum=(m.paineis||[]).some(p=>p.step!=="aguardando");
+  if(!algum) return "despacho";
+  const ord=["eng","qa","revisor","pr"];let last=-1;
+  (m.paineis||[]).forEach(p=>{if(p.step==="terminou"){const i=ord.indexOf(p.chave);if(i>last)last=i;}});
+  return ord[Math.min(last+1,3)];
+}
+function reprovada(m){return (m.paineis||[]).some(p=>p.chave==="revisor"&&p.step==="terminou"&&/REPROVADO/i.test(p.resultado||""));}
+function chip(m,tipo){
+  const rep=reprovada(m)&&m.rodando;
+  const cls=tipo==="feito"?(m.veredito==="interrompida"?"dead":(String(m.veredito||"").indexOf("reprov")>=0?"rep":"done")):(rep?"rep":"");
+  const pr=m.prUrl?' · <a href="'+esc(m.prUrl)+'" target="_blank">PR ↗</a>':"";
+  const ver=tipo==="feito"&&m.veredito?'<span>'+esc(m.veredito)+'</span>':"";
+  return '<div class="chip '+cls+'"><div class="p">'+esc(m.projeto)+(rep?" · ↻ 2ª":"")+'</div>'+
+    '<div class="o">'+esc(m.objetivo)+'</div>'+
+    '<div class="m">'+ver+'<span class="cu">'+din(m.custoTotal)+pr+'</span></div></div>';
+}
+function pintarProc(cont){
+  const X=[80,220,360,500,640,820],Y=98,R=30;
+  let s="";
+  for(let i=0;i<5;i++) s+='<line x1="'+(X[i]+R)+'" y1="'+Y+'" x2="'+(X[i+1]-R)+'" y2="'+Y+'" stroke="#3a5670" stroke-width="2" marker-end="url(#fa)"/>';
+  s+='<path d="M'+X[3]+' '+(Y-R)+' C '+X[3]+' 20,'+X[1]+' 20,'+X[1]+' '+(Y-R)+'" fill="none" stroke="${VERM}" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#fr)"/>';
+  s+='<text class="plooplb" x="'+((X[1]+X[3])/2)+'" y="15">reprovou → volta pro Engenheiro</text>';
+  COLS.forEach((c,i)=>{
+    const on=(cont[c.k]||0)>0;
+    s+='<circle class="pnode'+(on?" on":"")+'" cx="'+X[i]+'" cy="'+Y+'" r="'+R+'"/>';
+    s+='<text x="'+X[i]+'" y="'+(Y-3)+'" style="font-size:17px" text-anchor="middle">'+c.e+'</text>';
+    s+='<text class="plabel" x="'+X[i]+'" y="'+(Y+16)+'">'+c.n+'</text>';
+    s+=on?'<text class="pcount" x="'+X[i]+'" y="'+(Y+R+14)+'">'+cont[c.k]+' tarefa'+(cont[c.k]>1?"s":"")+'</text>'
+        :'<text class="pdesc" x="'+X[i]+'" y="'+(Y+R+13)+'">'+c.d+'</text>';
+  });
+  s+='<defs><marker id="fa" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="#3a5670"/></marker>'+
+     '<marker id="fr" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="${VERM}"/></marker></defs>';
+  document.getElementById("proc").innerHTML=s;
+}
+async function tick(){
+  let d; try{ d=await (await fetch("/retrato")).json(); }catch{ return; }
+  const ativas=(d.missoes||[]).filter(m=>m.rodando);
+  const feitas=(d.historico||[]).map(h=>({projeto:h.projeto,objetivo:h.objetivo,custoTotal:(h.custoTotal!=null?h.custoTotal:h.custo),veredito:h.veredito,prUrl:h.prUrl,rodando:false}));
+  const buckets={despacho:[],eng:[],qa:[],revisor:[],pr:[],feito:[]};
+  ativas.forEach(m=>{ (buckets[estagio(m)]||buckets.despacho).push(m); });
+  feitas.forEach(h=>buckets.feito.push(h));
+  const cont={}; COLS.forEach(c=>cont[c.k]=buckets[c.k].length);
+  pintarProc(cont);
+  document.getElementById("sub").textContent=ativas.length+" rodando · "+feitas.length+" no histórico";
+  document.getElementById("cols").innerHTML=COLS.map(c=>{
+    const items=buckets[c.k];
+    const body=items.length?items.map(m=>chip(m,c.k)).join(""):'<div class="empty">—</div>';
+    return '<div class="col"><div class="colh"><span class="e">'+c.e+'</span><span class="n">'+c.n+'</span><span class="c">'+(items.length||"")+'</span></div><div class="colbody">'+body+'</div></div>';
+  }).join("");
+}
+tick(); setInterval(tick,1500);
+</script></body></html>`;
+
 const CHAT_PAGE = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Boss · Chat</title>
 <style>
@@ -1325,6 +1436,10 @@ createServer(async (req, res) => {
     const timer = setInterval(enviar, 1000);
     req.on("close", () => clearInterval(timer));
     return;
+  }
+  if (req.url === "/fluxo") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    return res.end(FLUXO_PAGE); // grafo do processo + fluxo das tarefas (aba própria)
   }
   if (req.url === "/chat") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
