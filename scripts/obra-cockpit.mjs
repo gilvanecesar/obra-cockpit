@@ -1213,8 +1213,8 @@ header a{margin-left:auto;color:${AMBAR};text-decoration:none;font-size:11px;let
 .pdesc{fill:#6d8299;font:9px "SF Mono",monospace;text-anchor:middle;text-transform:uppercase;letter-spacing:.05em}
 .pcount{fill:${CIANO};font:700 10px "SF Mono",monospace;text-anchor:middle}
 .plooplb{fill:${VERM};font:700 9px "SF Mono",monospace;text-anchor:middle;letter-spacing:.05em}
-.cols{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:#16283c;border:1px solid #16283c;margin-top:12px}
-.col{background:#0b1420;min-height:130px;display:flex;flex-direction:column}
+.cols{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:#16283c;border:1px solid #16283c;margin-top:12px}
+.col{background:#0b1420;min-height:130px;min-width:0;display:flex;flex-direction:column}
 .colh{padding:8px 10px;border-bottom:1px solid #16283c;display:flex;align-items:center;gap:6px}
 .colh .e{font-size:15px}.colh .n{font-size:11px;font-weight:700;color:${GELO}}
 .colh .c{margin-left:auto;font-size:10px;color:${CIANO}}
@@ -1231,7 +1231,7 @@ header a{margin-left:auto;color:${AMBAR};text-decoration:none;font-size:11px;let
 </style></head><body>
 <header><h1>📊 FLUXO DA OBRA</h1><span class="sub" id="sub">o processo e as tarefas ao vivo</span><a href="/">← painel</a></header>
 <div class="wrap">
-  <svg class="proc" id="proc" viewBox="0 0 920 148" preserveAspectRatio="xMidYMid meet"></svg>
+  <svg class="proc" id="proc" viewBox="0 0 1140 126" preserveAspectRatio="xMidYMid meet"></svg>
   <div class="cols" id="cols"></div>
 </div>
 <script>
@@ -1266,18 +1266,19 @@ function chip(m,tipo){
     '<div class="m">'+ver+'<span class="cu">'+din(m.custoTotal)+pr+'</span></div></div>';
 }
 function pintarProc(cont){
-  const X=[80,220,360,500,640,820],Y=98,R=30;
+  const S=1140/6, cx=i=>Math.round(S*(i+0.5)); // centro de cada uma das 6 colunas
+  const CY=52, R=25; // quadrado 50×50 centrado no eixo de cada coluna
   let s="";
-  for(let i=0;i<5;i++) s+='<line x1="'+(X[i]+R)+'" y1="'+Y+'" x2="'+(X[i+1]-R)+'" y2="'+Y+'" stroke="#3a5670" stroke-width="2" marker-end="url(#fa)"/>';
-  s+='<path d="M'+X[3]+' '+(Y-R)+' C '+X[3]+' 20,'+X[1]+' 20,'+X[1]+' '+(Y-R)+'" fill="none" stroke="${VERM}" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#fr)"/>';
-  s+='<text class="plooplb" x="'+((X[1]+X[3])/2)+'" y="15">reprovou → volta pro Engenheiro</text>';
+  for(let i=0;i<5;i++) s+='<line x1="'+(cx(i)+R)+'" y1="'+CY+'" x2="'+(cx(i+1)-R)+'" y2="'+CY+'" stroke="#3a5670" stroke-width="2" marker-end="url(#fa)"/>';
+  s+='<path d="M'+cx(3)+' '+(CY-R)+' C '+cx(3)+' 8,'+cx(1)+' 8,'+cx(1)+' '+(CY-R)+'" fill="none" stroke="${VERM}" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#fr)"/>';
+  s+='<text class="plooplb" x="'+cx(2)+'" y="18">reprovou → volta pro Engenheiro</text>';
   COLS.forEach((c,i)=>{
-    const on=(cont[c.k]||0)>0;
-    s+='<rect class="pnode'+(on?" on":"")+'" x="'+(X[i]-R)+'" y="'+(Y-R)+'" width="'+(2*R)+'" height="'+(2*R)+'"/>';
-    s+='<text x="'+X[i]+'" y="'+(Y-3)+'" style="font-size:17px" text-anchor="middle">'+c.e+'</text>';
-    s+='<text class="plabel" x="'+X[i]+'" y="'+(Y+16)+'">'+c.n+'</text>';
-    s+=on?'<text class="pcount" x="'+X[i]+'" y="'+(Y+R+14)+'">'+cont[c.k]+' tarefa'+(cont[c.k]>1?"s":"")+'</text>'
-        :'<text class="pdesc" x="'+X[i]+'" y="'+(Y+R+13)+'">'+c.d+'</text>';
+    const on=(cont[c.k]||0)>0, X=cx(i);
+    s+='<rect class="pnode'+(on?" on":"")+'" x="'+(X-R)+'" y="'+(CY-R)+'" width="'+(2*R)+'" height="'+(2*R)+'"/>';
+    s+='<text x="'+X+'" y="'+CY+'" text-anchor="middle" dominant-baseline="central" style="font-size:22px">'+c.e+'</text>';
+    s+='<text class="plabel" x="'+X+'" y="'+(CY+R+17)+'">'+c.n+'</text>';
+    s+=on?'<text class="pcount" x="'+X+'" y="'+(CY+R+31)+'">'+cont[c.k]+' tarefa'+(cont[c.k]>1?"s":"")+'</text>'
+        :'<text class="pdesc" x="'+X+'" y="'+(CY+R+30)+'">'+c.d+'</text>';
   });
   s+='<defs><marker id="fa" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="#3a5670"/></marker>'+
      '<marker id="fr" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="${VERM}"/></marker></defs>';
