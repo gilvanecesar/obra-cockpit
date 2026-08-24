@@ -735,13 +735,13 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6d82
 </style></head><body>
 <header>
   <h1>COCKPIT<b>·</b>OBRA</h1>
+  <span id="ver" title="versão do cockpit no ar">v${VERSAO}</span>
   <div class="abas" id="abas"></div>
   <button class="aba fluxo" id="btFluxo" title="Ver o grafo do processo e o fluxo das tarefas" onclick="window.open('/fluxo','_blank')">📊 fluxo</button>
   <button class="aba ver" id="btVer" title="Abrir o sistema deste projeto no navegador">🌐 ver sistema</button>
   <button class="aba mais" id="btNovo" title="Adicionar ou criar um projeto">+ novo</button>
   <button class="aba boss" id="btBoss" title="Falar com o Boss">💬 boss</button>
   <span id="conta"></span>
-  <span id="ver" title="versão do cockpit no ar">v${VERSAO}</span>
   <span id="relogio"></span>
 </header>
 <div class="chat" id="chat">
