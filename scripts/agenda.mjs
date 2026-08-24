@@ -50,8 +50,8 @@ if (cmd === "add") {
 }
 else if (cmd === "list") {
   const lista = ler();
-  if (!lista.length) return console.log("(nenhuma tarefa agendada)");
-  for (const t of lista) console.log(
+  if (!lista.length) console.log("(nenhuma tarefa agendada)");
+  else for (const t of lista) console.log(
     `${t.ativo === false ? "[off] " : ""}${t.nome}  ·  ${t.cron}  →  ${t.projeto}  |  último: ${t.lastRun || "nunca"}${t.lastOk === false ? " (falhou)" : ""}\n    ${String(t.prompt).slice(0, 90)}`);
 }
 else if (cmd === "rm") {
