@@ -940,7 +940,7 @@ function miniGrafo(m){
   }
   nos.forEach(function(n,i){
     const e=st[n[0]]||"wait";
-    s+='<circle cx="'+X[i]+'" cy="'+Y+'" r="'+R+'" fill="'+cor[e]+'"'+(e==="run"?' class="mg-puls"':'')+'/>';
+    s+='<rect x="'+(X[i]-R)+'" y="'+(Y-R)+'" width="'+(2*R)+'" height="'+(2*R)+'" fill="'+cor[e]+'"'+(e==="run"?' class="mg-puls"':'')+'/>';
     s+='<text x="'+X[i]+'" y="'+(Y+R+11)+'" text-anchor="middle" class="mg-lb">'+n[1]+'</text>';
   });
   s+='</svg>';
@@ -1273,7 +1273,7 @@ function pintarProc(cont){
   s+='<text class="plooplb" x="'+((X[1]+X[3])/2)+'" y="15">reprovou → volta pro Engenheiro</text>';
   COLS.forEach((c,i)=>{
     const on=(cont[c.k]||0)>0;
-    s+='<circle class="pnode'+(on?" on":"")+'" cx="'+X[i]+'" cy="'+Y+'" r="'+R+'"/>';
+    s+='<rect class="pnode'+(on?" on":"")+'" x="'+(X[i]-R)+'" y="'+(Y-R)+'" width="'+(2*R)+'" height="'+(2*R)+'"/>';
     s+='<text x="'+X[i]+'" y="'+(Y-3)+'" style="font-size:17px" text-anchor="middle">'+c.e+'</text>';
     s+='<text class="plabel" x="'+X[i]+'" y="'+(Y+16)+'">'+c.n+'</text>';
     s+=on?'<text class="pcount" x="'+X[i]+'" y="'+(Y+R+14)+'">'+cont[c.k]+' tarefa'+(cont[c.k]>1?"s":"")+'</text>'
