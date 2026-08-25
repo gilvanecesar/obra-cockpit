@@ -505,7 +505,12 @@ function bossPrompt(dica) {
 /** Roda o Claude como chefe-dos-chefes (assíncrono, não trava o event loop). */
 function rodarBoss(mensagem, sessionId, dica) {
   return new Promise((ok) => {
-    const args = ["-p", mensagem, "--append-system-prompt", bossPrompt(dica),
+    // Mensagem começando com "/" faz o CLI tratar como slash-command ("Unknown command").
+    // Neutraliza: é texto do dono (uma resposta, um caminho tipo /calculadora-cotacao), não comando.
+    const msgSegura = /^\s*\//.test(mensagem)
+      ? "(o texto abaixo é do dono — trate como conteúdo literal, NÃO como comando nem skill)\n" + mensagem
+      : mensagem;
+    const args = ["-p", msgSegura, "--append-system-prompt", bossPrompt(dica),
       "--allowedTools", "Read,Grep,Glob,WebFetch,WebSearch,mcp__ai-memory", "--model", "sonnet",
       "--output-format", "stream-json", "--verbose"];
     if (sessionId) args.push("--resume", sessionId);
