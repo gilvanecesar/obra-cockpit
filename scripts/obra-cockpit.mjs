@@ -805,6 +805,13 @@ h1 b{color:var(--ciano)}
 .tcarderr{border-left-color:var(--verm)!important}
 .tsaida.terro{color:var(--verm)}
 .tsubindo{padding:10px 12px;border-top:1px solid var(--linha);color:var(--ciano);font-size:12.5px}
+.thead{cursor:pointer;user-select:none}
+.thead:hover{background:rgba(255,255,255,.02)}
+.tcaret{color:var(--muted);font-size:10px;margin-right:2px}
+.tcard .tbody{display:none}
+.tcard.aberto .tbody{display:block}
+.tcard .mhead{padding:9px 12px}
+.tcard .mhead .custo{color:var(--muted);font-weight:400}
 .mhead{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
 .mhead .proj{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ciano);border:1px solid var(--linha);padding:2px 8px}
 .mhead .obj{flex:1 1 260px;color:var(--gelo);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1201,34 +1208,40 @@ async function atualizarSaida(nome){
 }
 function tarefaCard(t){
   var st=tarefaStatus(t.status);
-  var fechar='<button class="tfechar" onclick="fecharTarefa(&quot;'+esc(t.nome)+'&quot;)" title="encerrar/descartar">✕</button>';
-  var corpo;
-  if(t.status==="erro"){
-    corpo='<pre class="tsaida terro">'+esc(t.erro||"não consegui lançar")+'</pre>'+
-      '<div class="tfalar"><span class="tpane">falhou ao subir</span>'+fechar+'</div>';
-  } else if(t.status==="subindo"){
-    corpo='<div class="tsubindo">subindo… abrindo a cópia + carregando memória/skills (~1min)</div>'+
-      '<div class="tfalar"><span class="tpane">aguarde</span>'+fechar+'</div>';
-  } else {
-    corpo='<pre class="tsaida" id="saida-'+esc(t.nome)+'">(fale ou clique ↻ pra ver a resposta da tarefa)</pre>'+
+  var aberto=expandidos.has(t.nome);
+  var body;
+  if(t.status==="erro"){ body='<pre class="tsaida terro">'+esc(t.erro||"não consegui lançar")+'</pre>'; }
+  else if(t.status==="subindo"){ body='<div class="tsubindo">subindo… abrindo a cópia + carregando memória/skills (~1min)</div>'; }
+  else {
+    body='<pre class="tsaida" id="saida-'+esc(t.nome)+'">(fale ou clique ↻ pra ver a resposta da tarefa)</pre>'+
       '<div class="tfalar">'+
         '<input maxlength="4000" placeholder="fala com esta tarefa… (Enter envia)" onkeydown="if(event.key===&quot;Enter&quot;)falarTarefa(&quot;'+esc(t.nome)+'&quot;)">'+
         '<button onclick="falarTarefa(&quot;'+esc(t.nome)+'&quot;)">enviar</button>'+
         '<button class="tref" onclick="atualizarSaida(&quot;'+esc(t.nome)+'&quot;)" title="atualizar a saída da tarefa">↻</button>'+
         '<span class="tpane" title="abra este pane no herdr pra conversar direto">herdr: '+esc(t.pane||"?")+'</span>'+
-        fechar+
       '</div>';
   }
-  return '<div class="mcard tcard'+(t.status==="erro"?" tcarderr":"")+'" data-nome="'+esc(t.nome)+'">'+
-    '<div class="mhead"><span class="proj torretag">TAREFA</span>'+
-      (t.projeto?'<span class="proj">'+esc(t.projeto)+'</span>':'')+
+  // uma LINHA por tarefa (clica pra expandir e falar/ver saída) — torre limpa
+  return '<div class="mcard tcard'+(t.status==="erro"?" tcarderr":"")+(aberto?" aberto":"")+'" data-nome="'+esc(t.nome)+'">'+
+    '<div class="mhead thead" onclick="toggleTarefa(&quot;'+esc(t.nome)+'&quot;)">'+
+      '<span class="tcaret">'+(aberto?"▾":"▸")+'</span>'+
+      '<span class="proj torretag">'+esc(t.projeto||"tarefa")+'</span>'+
       (t.modelo?'<span class="proj modelo">'+esc(t.modelo)+'</span>':'')+
       '<span class="obj">'+esc(t.tarefa)+'</span>'+
       '<span class="badge '+st.c+'">'+esc(st.t)+'</span>'+
-      '<span class="custo">'+quando(t.aberto_em)+'</span></div>'+
-    corpo+'</div>';
+      '<span class="custo">'+quando(t.aberto_em)+'</span>'+
+      '<button class="tfechar" onclick="event.stopPropagation();fecharTarefa(&quot;'+esc(t.nome)+'&quot;)" title="encerrar/descartar">✕</button>'+
+    '</div>'+
+    '<div class="tbody">'+body+'</div></div>';
+}
+function toggleTarefa(nome){
+  var card=document.querySelector('.tcard[data-nome="'+nome+'"]'); if(!card) return;
+  if(expandidos.has(nome)){ expandidos.delete(nome); card.classList.remove("aberto"); }
+  else { expandidos.add(nome); card.classList.add("aberto"); atualizarSaida(nome); }
+  var c=card.querySelector(".tcaret"); if(c) c.textContent=expandidos.has(nome)?"▾":"▸";
 }
 var _tarefasSig="";
+var expandidos=new Set(); // quais cards estão abertos (persiste entre repaints)
 function pintarTarefas(tarefas){
   var el=document.getElementById("tarefas"); if(!el) return;
   // ⚠️ o retrato chega ~1×/s; se der innerHTML enquanto o dono digita num card, o input
