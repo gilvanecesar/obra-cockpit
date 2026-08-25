@@ -45,6 +45,10 @@ import {
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+// Modelo por tarefa (multi-modelos): `--modelo claude|sonnet|opus|codex|...` no comando.
+// Fica no escopo do módulo; a dispatch lá embaixo tira do argv e preenche antes de abrir().
+let MODELO = null;
+
 /** herdr responde JSON numa linha só; erro vem em texto. */
 function herdr(...args) {
   const saida = execFileSync("herdr", args, { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
@@ -78,6 +82,15 @@ Você é um agente de uma equipe. Trabalhe SÓ dentro desta cópia do repositór
 `.trim();
 
 const PAPEIS = {
+  // "solo" = o modo LEVE: um fazedor completo (o "eu" do dono) num pane só, que faz a
+  // tarefa de ponta a ponta e FICA disponível pro dono entrar e continuar conversando.
+  solo: (tarefa) => `${REGRAS_DA_CASA}
+
+SUA FUNÇÃO: fazer a tarefa inteira, sozinho — você é o assistente do dono neste painel.
+Ao terminar, NÃO encerre: fique disponível. O dono pode entrar aqui e continuar
+conversando sobre esta tarefa (pedir ajuste, ver o diff, mudar o rumo).
+
+TAREFA:\n${tarefa}`,
   engenheiro: (tarefa) => `${REGRAS_DA_CASA}\n\nSUA FUNÇÃO: implementar.\n\nTAREFA:\n${tarefa}`,
   testador: (tarefa) => `${REGRAS_DA_CASA}
 
@@ -213,7 +226,9 @@ function abrir(nome, texto, papel = "engenheiro", a4, a5) {
 
   // 2) o agente sobe NO painel, sem parar para pedir permissão (está isolado no galho)
   esperarShell(pane);
-  herdr("agent", "start", nome, "--kind", "claude", "--pane", pane, "--", "--dangerously-skip-permissions");
+  const extraClaude = ["--dangerously-skip-permissions"];
+  if (MODELO) extraClaude.push("--model", MODELO); // multi-modelos: cada tarefa pode ter o seu
+  herdr("agent", "start", nome, "--kind", "claude", "--pane", pane, "--", ...extraClaude);
 
   // 3) a tarefa
   /**
@@ -226,6 +241,7 @@ function abrir(nome, texto, papel = "engenheiro", a4, a5) {
   const reg = lerRegistro();
   reg.agentes[nome] = {
     papel,
+    modelo: MODELO || null,
     projeto: repo.split("/").pop(),
     workspace,
     pane,
@@ -326,6 +342,11 @@ function fechar(nome) {
 }
 
 const [cmd, ...args] = process.argv.slice(2);
+// tira `--modelo <m>` de qualquer posição pra não bagunçar o parse posicional do abrir
+{
+  const i = args.indexOf("--modelo");
+  if (i >= 0) { MODELO = args[i + 1] || null; args.splice(i, 2); }
+}
 try {
   if (cmd === "abrir") abrir(args[0], args[1], args[2], args[3], args[4]);
   else if (cmd === "tarefa") tarefa(args);
