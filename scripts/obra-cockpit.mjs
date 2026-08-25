@@ -1157,8 +1157,17 @@ function tarefaCard(t){
       '<button class="tfechar" onclick="fecharTarefa(&quot;'+esc(t.nome)+'&quot;)" title="encerrar tarefa">✕</button>'+
     '</div></div>';
 }
+var _tarefasSig="";
 function pintarTarefas(tarefas){
   var el=document.getElementById("tarefas"); if(!el) return;
+  // ⚠️ o retrato chega ~1×/s; se der innerHTML enquanto o dono digita num card, o input
+  // some (perde foco + texto). Então: NÃO repinta se o foco está dentro da torre...
+  var foco=document.activeElement;
+  if(foco && el.contains(foco)) return;
+  // ...e só repinta quando a LISTA muda de verdade (evita churn e piscar do DOM).
+  var sig=JSON.stringify((tarefas||[]).map(function(t){return [t.nome,t.projeto,t.modelo,t.tarefa,t.pane]}));
+  if(sig===_tarefasSig) return;
+  _tarefasSig=sig;
   el.innerHTML=(tarefas&&tarefas.length)?tarefas.map(tarefaCard).join(""):'';
 }
 
