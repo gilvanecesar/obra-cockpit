@@ -138,6 +138,13 @@ const MAPA = {
  * projetos do dono, e cada agente herda o CLAUDE.md DAQUELE código, que é o que o
  * ensina a não fazer besteira lá dentro.
  */
+/** Nome curto e legível da tarefa pro worktree — em vez de "green-stone-a1b2". */
+function slugTarefa(t) {
+  const s = String(t || "tarefa").toLowerCase().normalize("NFD").replace(/[^\x00-\x7f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").split("-").filter(Boolean).slice(0, 5).join("-");
+  return (s || "tarefa").slice(0, 32);
+}
+
 function workspaceDoProjeto(projeto) {
   const alvo = projeto ? String(projeto) : RAIZ;
   const base = alvo.split("/").pop();
@@ -251,7 +258,7 @@ function abrir(nome, texto, papel = "engenheiro", a4, a5) {
    * workspace de algum painel cujo diretório é a raiz DESTE repositório.
    */
   const { workspace: origem, repo } = workspaceDoProjeto(projeto);
-  const wt = herdr("worktree", "create", "--workspace", origem);
+  const wt = herdr("worktree", "create", "--workspace", origem, "--label", slugTarefa(tarefa));
   const workspace = wt.workspace.workspace_id;
   const pane = wt.root_pane.pane_id;
   const caminho = wt.worktree.path;
