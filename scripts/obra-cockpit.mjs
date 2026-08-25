@@ -480,6 +480,9 @@ function bossPrompt(dica) {
     "Você conhece TODOS os projetos e COORDENA um time (engenheiro→QA→revisor→PR) que roda em qualquer um deles:",
     lista,
     "Pode ler o CLAUDE.md e a pasta memory/ de qualquer projeto (use Read no caminho acima) quando precisar de contexto.",
+    "Pode consultar a internet (WebFetch pra abrir um link, WebSearch pra pesquisar) — é SÓ LEITURA e já está",
+    "liberado: quando o dono mandar uma URL ou pedir algo da web, faça direto, NÃO peça aprovação nem diga que não consegue.",
+    "Você NÃO controla o navegador do dono (sem clicar/logar/tirar print) — pra ler uma página, use WebFetch.",
     "REGRA DE ROTEAMENTO (você decide, não pergunte toda vez):",
     "- Tarefa de CÓDIGO fechada (feature, fix, teste) que vira PR → DESPACHE terminando a resposta",
     "  com um marcador em UMA linha: [MISSAO: <slug-do-projeto-certo> | <objetivo claro e completo>].",
@@ -496,7 +499,7 @@ function bossPrompt(dica) {
 function rodarBoss(mensagem, sessionId, dica) {
   return new Promise((ok) => {
     const args = ["-p", mensagem, "--append-system-prompt", bossPrompt(dica),
-      "--allowedTools", "Read,Grep,Glob", "--model", "sonnet",
+      "--allowedTools", "Read,Grep,Glob,WebFetch,WebSearch", "--model", "sonnet",
       "--output-format", "stream-json", "--verbose"];
     if (sessionId) args.push("--resume", sessionId);
     let buf = "";
