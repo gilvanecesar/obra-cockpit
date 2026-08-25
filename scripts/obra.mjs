@@ -145,6 +145,12 @@ function slugTarefa(t) {
   return (s || "tarefa").slice(0, 32);
 }
 
+/** O workspace "Boss" do herdr (o dono criou pra agrupar as tarefas), ou null. */
+function workspaceBoss() {
+  const ws = (herdr("workspace", "list").workspaces || []).find((w) => String(w.label || "").toLowerCase() === "boss");
+  return ws ? ws.workspace_id : null;
+}
+
 function workspaceDoProjeto(projeto) {
   const alvo = projeto ? String(projeto) : RAIZ;
   const base = alvo.split("/").pop();
@@ -258,10 +264,25 @@ function abrir(nome, texto, papel = "engenheiro", a4, a5) {
    * workspace de algum painel cujo diretório é a raiz DESTE repositório.
    */
   const { workspace: origem, repo } = workspaceDoProjeto(projeto);
-  const wt = herdr("worktree", "create", "--workspace", origem, "--label", slugTarefa(tarefa));
-  const workspace = wt.workspace.workspace_id;
-  const pane = wt.root_pane.pane_id;
-  const caminho = wt.worktree.path;
+  const slug = slugTarefa(tarefa);
+  const boss = workspaceBoss(); // agrupa as tarefas no workspace "Boss" (pedido do dono)
+  let workspace, pane, caminho, manualGit = false, tabId = null;
+  if (boss) {
+    // worktree do repo numa pasta dentro de ~/Documents/DEV/Boss + pane DENTRO do workspace Boss,
+    // nomeado pela tarefa. Assim as tarefas ficam TODAS juntas embaixo do "Boss" no herdr.
+    const base = repo.split("/").pop();
+    const id = Math.abs(Date.now() % 1e7).toString(36);
+    caminho = resolve(process.env.HOME || "/home/saturno", "Documents/DEV/Boss/.tarefas", `${base}-${slug}-${id}`);
+    execFileSync("git", ["-C", repo, "worktree", "add", "-b", `obra/${slug}-${id}`, caminho], { stdio: "ignore" });
+    const tab = herdr("tab", "create", "--workspace", boss, "--cwd", caminho, "--label", slug, "--no-focus");
+    const rp = tab.root_pane || tab.pane || tab;
+    pane = rp.pane_id;
+    tabId = (tab.tab && tab.tab.tab_id) || rp.tab_id || null;
+    workspace = boss; manualGit = true;
+  } else {
+    const wt = herdr("worktree", "create", "--workspace", origem, "--label", slug);
+    workspace = wt.workspace.workspace_id; pane = wt.root_pane.pane_id; caminho = wt.worktree.path;
+  }
   confiarPasta(caminho); // marca a cópia como confiável → o claude não trava no "confia nesta pasta?"
 
   // node_modules na cópia: worktree é um checkout git LIMPO (sem node_modules), então build/teste
@@ -282,7 +303,10 @@ function abrir(nome, texto, papel = "engenheiro", a4, a5) {
   try {
     herdr("agent", "start", nome, "--kind", "claude", "--pane", pane, "--timeout", "120000", "--", ...extraClaude);
   } catch (e) {
-    try { herdr("worktree", "remove", "--workspace", workspace, "--force"); } catch (_) { /* ok */ }
+    try {
+      if (manualGit) { execFileSync("git", ["-C", repo, "worktree", "remove", caminho, "--force"], { stdio: "ignore" }); if (tabId) herdr("tab", "close", tabId); }
+      else herdr("worktree", "remove", "--workspace", workspace, "--force");
+    } catch (_) { /* ok */ }
     throw new Error(`o agente não subiu (${e.message}) — cópia removida`);
   }
 
@@ -302,6 +326,9 @@ function abrir(nome, texto, papel = "engenheiro", a4, a5) {
     workspace,
     pane,
     caminho,
+    repoOrigem: repo,
+    manualGit,
+    tabId,
     tarefa,
     tarefaId: doQuadro?.id || null,
     aberto_em: new Date().toISOString(),
@@ -386,7 +413,12 @@ function fechar(nome) {
   const r = reg.agentes[nome];
   if (!r) throw new Error(`não conheço o agente ${nome}`);
   try {
-    herdr("worktree", "remove", "--workspace", r.workspace, "--force");
+    if (r.manualGit && r.caminho) {
+      if (r.repoOrigem) execFileSync("git", ["-C", r.repoOrigem, "worktree", "remove", r.caminho, "--force"], { stdio: "ignore" });
+      if (r.tabId) herdr("tab", "close", r.tabId);
+    } else {
+      herdr("worktree", "remove", "--workspace", r.workspace, "--force");
+    }
   } catch (e) {
     console.error("aviso ao remover a cópia:", e.message);
   }
