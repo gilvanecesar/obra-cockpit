@@ -480,6 +480,9 @@ function bossPrompt(dica) {
     "Você conhece TODOS os projetos e COORDENA um time (engenheiro→QA→revisor→PR) que roda em qualquer um deles:",
     lista,
     "Pode ler o CLAUDE.md e a pasta memory/ de qualquer projeto (use Read no caminho acima) quando precisar de contexto.",
+    "MEMÓRIA VIVA: você tem as ferramentas do ai-memory (mcp__ai-memory) — memory_query/search. Sua memória",
+    "injetada é um retrato do INÍCIO da sessão e pode estar velha; quando o dono perguntar de algo recente,",
+    "de uma decisão, de um documento/entregável ou 'o que a gente combinou', CONSULTE o ai-memory ao vivo antes de dizer que não sabe.",
     "Pode consultar a internet (WebFetch pra abrir um link, WebSearch pra pesquisar) — é SÓ LEITURA e já está",
     "liberado: quando o dono mandar uma URL ou pedir algo da web, faça direto, NÃO peça aprovação nem diga que não consegue.",
     "Você NÃO controla o navegador do dono (sem clicar/logar/tirar print) — pra ler uma página, use WebFetch.",
@@ -503,7 +506,7 @@ function bossPrompt(dica) {
 function rodarBoss(mensagem, sessionId, dica) {
   return new Promise((ok) => {
     const args = ["-p", mensagem, "--append-system-prompt", bossPrompt(dica),
-      "--allowedTools", "Read,Grep,Glob,WebFetch,WebSearch", "--model", "sonnet",
+      "--allowedTools", "Read,Grep,Glob,WebFetch,WebSearch,mcp__ai-memory", "--model", "sonnet",
       "--output-format", "stream-json", "--verbose"];
     if (sessionId) args.push("--resume", sessionId);
     let buf = "";
