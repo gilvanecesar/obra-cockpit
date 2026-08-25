@@ -230,6 +230,23 @@ function rodarObra(args) {
     cp.on("error", (e) => ok({ code: 1, out: String(e && e.message || e) }));
   });
 }
+// status ao vivo de cada workspace do herdr (trabalhando/pronto/…), atualizado em segundo plano
+let wsStatusCache = {};
+let wsStatusRodando = false;
+function atualizarStatusTarefas() {
+  if (wsStatusRodando) return; wsStatusRodando = true;
+  const cp = spawn("herdr", ["workspace", "list"], { env: process.env });
+  let out = "";
+  cp.stdout.on("data", (d) => { out += d; });
+  cp.on("close", () => {
+    wsStatusRodando = false;
+    try { const j = JSON.parse(out); const ws = (j.result || j).workspaces || []; const m = {}; ws.forEach((w) => { m[w.workspace_id] = w.agent_status || null; }); wsStatusCache = m; } catch { /* herdr fora do ar: mantém o último */ }
+  });
+  cp.on("error", () => { wsStatusRodando = false; });
+}
+setInterval(atualizarStatusTarefas, 4000);
+try { atualizarStatusTarefas(); } catch { /* ok */ }
+
 // os agentes vivos da obra (registro em disco) viram os cards da torre
 function lerTarefas() {
   try {
@@ -237,7 +254,8 @@ function lerTarefas() {
     const ag = r.agentes || {};
     return Object.entries(ag).map(([nome, a]) => ({
       nome, projeto: a.projeto || null, modelo: a.modelo || null, papel: a.papel || null,
-      tarefa: a.tarefa || "", pane: a.pane || null, aberto_em: a.aberto_em || null,
+      tarefa: a.tarefa || "", pane: a.pane || null, workspace: a.workspace || null,
+      status: (a.workspace && wsStatusCache[a.workspace]) || null, aberto_em: a.aberto_em || null,
     })).sort((x, y) => String(y.aberto_em).localeCompare(String(x.aberto_em)));
   } catch { return []; }
 }
@@ -768,6 +786,8 @@ h1 b{color:var(--ciano)}
 .tfalar button{background:transparent;border:1px solid var(--ciano);color:var(--ciano);padding:6px 12px;cursor:pointer;font-size:12px}
 .tpane{font-size:11px;color:var(--muted)}
 .tfechar{border-color:var(--linha)!important;color:var(--muted)!important}
+.tsaida{margin:0;padding:8px 12px;border-top:1px solid var(--linha);background:#0c0c0f;color:var(--muted);font:12px/1.5 var(--mono,monospace);white-space:pre-wrap;max-height:170px;overflow:auto}
+.tref{background:transparent;border:1px solid var(--linha);color:var(--muted);padding:6px 10px;cursor:pointer;font-size:13px}
 .mhead{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
 .mhead .proj{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ciano);border:1px solid var(--linha);padding:2px 8px}
 .mhead .obj{flex:1 1 260px;color:var(--gelo);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1137,22 +1157,43 @@ async function falarTarefa(nome){
   inp.disabled=true;
   try{ await fetch("/tarefa/falar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:nome,texto:texto})}); inp.value=""; }catch(e){}
   inp.disabled=false; inp.focus();
+  // mostra a resposta da tarefa (ela responde no pane; puxamos algumas vezes pra pegar a réplica)
+  atualizarSaida(nome);
+  setTimeout(function(){atualizarSaida(nome);},2200);
+  setTimeout(function(){atualizarSaida(nome);},5000);
 }
 async function fecharTarefa(nome){
   if(!confirm("Encerrar a tarefa "+nome+"? (remove a cópia do repositório)")) return;
   try{ await fetch("/tarefa/fechar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:nome})}); }catch(e){}
 }
+function tarefaStatus(s){
+  s=String(s||"").toLowerCase();
+  if(s==="running"||s==="busy"||s==="working"||s==="thinking") return {t:"trabalhando",c:"b-on"};
+  if(s==="done"||s==="finished") return {t:"pronto",c:"b-off"};
+  if(s==="idle"||s==="waiting"||s==="ready") return {t:"aguardando",c:"b-off"};
+  if(!s||s==="unknown") return {t:"—",c:"b-off"};
+  return {t:s,c:"b-off"};
+}
+async function atualizarSaida(nome){
+  var el=document.getElementById("saida-"+nome); if(!el) return;
+  el.textContent="carregando…";
+  try{ var r=await fetch("/tarefa/saida?nome="+encodeURIComponent(nome)); var j=await r.json(); el.textContent=(j.texto||"").trim()||"(sem saída ainda)"; el.scrollTop=el.scrollHeight; }
+  catch(e){ el.textContent="(erro ao ler a saída)"; }
+}
 function tarefaCard(t){
-  return '<div class="mcard tcard rodando" data-nome="'+esc(t.nome)+'">'+
+  var st=tarefaStatus(t.status);
+  return '<div class="mcard tcard" data-nome="'+esc(t.nome)+'">'+
     '<div class="mhead"><span class="proj torretag">TAREFA</span>'+
       (t.projeto?'<span class="proj">'+esc(t.projeto)+'</span>':'')+
       (t.modelo?'<span class="proj modelo">'+esc(t.modelo)+'</span>':'')+
       '<span class="obj">'+esc(t.tarefa)+'</span>'+
-      '<span class="badge b-on">rodando</span>'+
+      '<span class="badge '+st.c+'">'+esc(st.t)+'</span>'+
       '<span class="custo">'+quando(t.aberto_em)+'</span></div>'+
+    '<pre class="tsaida" id="saida-'+esc(t.nome)+'">(fale ou clique ↻ pra ver a resposta da tarefa)</pre>'+
     '<div class="tfalar">'+
       '<input maxlength="4000" placeholder="fala com esta tarefa… (Enter envia)" onkeydown="if(event.key===&quot;Enter&quot;)falarTarefa(&quot;'+esc(t.nome)+'&quot;)">'+
       '<button onclick="falarTarefa(&quot;'+esc(t.nome)+'&quot;)">enviar</button>'+
+      '<button class="tref" onclick="atualizarSaida(&quot;'+esc(t.nome)+'&quot;)" title="atualizar a saída da tarefa">↻</button>'+
       '<span class="tpane" title="abra este pane no herdr pra conversar direto">herdr: '+esc(t.pane||"?")+'</span>'+
       '<button class="tfechar" onclick="fecharTarefa(&quot;'+esc(t.nome)+'&quot;)" title="encerrar tarefa">✕</button>'+
     '</div></div>';
@@ -1165,7 +1206,7 @@ function pintarTarefas(tarefas){
   var foco=document.activeElement;
   if(foco && el.contains(foco)) return;
   // ...e só repinta quando a LISTA muda de verdade (evita churn e piscar do DOM).
-  var sig=JSON.stringify((tarefas||[]).map(function(t){return [t.nome,t.projeto,t.modelo,t.tarefa,t.pane]}));
+  var sig=JSON.stringify((tarefas||[]).map(function(t){return [t.nome,t.projeto,t.modelo,t.tarefa,t.pane,t.status]}));
   if(sig===_tarefasSig) return;
   _tarefasSig=sig;
   el.innerHTML=(tarefas&&tarefas.length)?tarefas.map(tarefaCard).join(""):'';
@@ -1713,6 +1754,16 @@ createServer(async (req, res) => {
       const r = await rodarObra(["falar", nome, texto]);
       if (r.code !== 0) return json(502, { erro: "não consegui falar com a tarefa", detalhe: r.out.slice(0, 400) });
       return json(200, { ok: true });
+    } catch (e) { return json(400, { erro: e.message }); }
+  }
+  // Torre: lê a saída recente de uma tarefa (o que ela respondeu no pane)
+  if (req.method === "GET" && req.url.startsWith("/tarefa/saida")) {
+    try {
+      const u = new URL(req.url, "http://x");
+      const nome = String(u.searchParams.get("nome") || "").trim();
+      if (!nome) return json(400, { erro: "faltou nome" });
+      const r = await rodarObra(["ler", nome, "30"]);
+      return json(200, { texto: r.out });
     } catch (e) { return json(400, { erro: e.message }); }
   }
   // Torre: encerra uma tarefa (remove a cópia e o pane)
