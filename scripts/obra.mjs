@@ -27,7 +27,7 @@
  *   node scripts/obra.mjs tarefa mover <id> <estado>
  */
 import { execFileSync } from "child_process";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import {
@@ -143,24 +143,30 @@ function workspaceDoProjeto(projeto) {
   const base = alvo.split("/").pop();
   const bate = (cwd) =>
     cwd === alvo || cwd.endsWith("/" + alvo) || cwd.toLowerCase().endsWith("/" + alvo.toLowerCase());
-  const workspaces = herdr("workspace", "list").workspaces || [];
+  // preferir o workspace cujo RÓTULO (raiz) É o projeto — esse é git de verdade (evita pegar
+  // um "~" só porque um pane dele deu `cd` pra dentro → worktree create daria not_git_worktree).
+  const acharWs = () => (herdr("workspace", "list").workspaces || []).find((w) => { const l = String(w.label || ""); return l === base || l.split("/").pop() === base; });
+  let ws = acharWs();
+  // fallback: pela cwd de algum pane
+  if (!ws) {
+    const p = (herdr("pane", "list").panes || []).find((p) => bate(p.cwd || ""));
+    if (p) ws = (herdr("workspace", "list").workspaces || []).find((w) => w.workspace_id === p.workspace_id) || { workspace_id: p.workspace_id };
+  }
+  // AUTO-ABRIR (todo projeto é automático): se não está aberto, abre como workspace apontando
+  // pra pasta do projeto (~/Documents/DEV/<projeto>). Assim TMS/torre/AGB funcionam sem o dono
+  // abrir na mão no herdr — pedido do dono 25/08.
+  const dir = alvo.includes("/") ? alvo : resolve(process.env.HOME || "/home/saturno", "Documents/DEV", base);
+  if (!ws && existsSync(dir)) {
+    try { herdr("workspace", "create", "--cwd", dir, "--label", base, "--no-focus"); } catch (e) { /* segue e tenta achar */ }
+    ws = acharWs();
+  }
+  if (!ws) {
+    throw new Error(`não consegui abrir o projeto "${base}" (pasta ${dir}). Existe no saturno e é um repositório git?`);
+  }
   const paineis = herdr("pane", "list").panes || [];
-  // 1) preferir o workspace cujo RÓTULO (raiz) É o projeto — esse é git de verdade.
-  //    Evita pegar um workspace "~" só porque um pane dele deu `cd` pra dentro do projeto
-  //    (aí `worktree create` falha com not_git_worktree). Achado 24/08 com sessão "eu".
-  let ws = workspaces.find((w) => { const l = String(w.label || ""); return l === base || l.split("/").pop() === base; });
-  // 2) fallback: pela cwd de algum pane (comportamento antigo)
-  if (!ws) {
-    const p = paineis.find((p) => bate(p.cwd || ""));
-    if (p) ws = workspaces.find((w) => w.workspace_id === p.workspace_id) || { workspace_id: p.workspace_id };
-  }
-  if (!ws) {
-    const rotulos = [...new Set(workspaces.map((w) => w.label).filter(Boolean))];
-    throw new Error(`nenhum workspace do herdr no projeto "${base}".\nWorkspaces abertos:\n  ` + rotulos.join("\n  "));
-  }
   const pane = paineis.find((p) => p.workspace_id === ws.workspace_id && bate(p.cwd || ""))
             || paineis.find((p) => p.workspace_id === ws.workspace_id);
-  return { workspace: ws.workspace_id, repo: (pane && pane.cwd) || base };
+  return { workspace: ws.workspace_id, repo: (pane && pane.cwd) || dir };
 }
 
 /** Os repositórios que a obra alcança agora (um workspace aberto = um projeto disponível). */
