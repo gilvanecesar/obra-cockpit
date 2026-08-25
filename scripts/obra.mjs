@@ -139,18 +139,28 @@ const MAPA = {
  * ensina a não fazer besteira lá dentro.
  */
 function workspaceDoProjeto(projeto) {
-  const paineis = herdr("pane", "list").panes || [];
   const alvo = projeto ? String(projeto) : RAIZ;
+  const base = alvo.split("/").pop();
   const bate = (cwd) =>
     cwd === alvo || cwd.endsWith("/" + alvo) || cwd.toLowerCase().endsWith("/" + alvo.toLowerCase());
-  const meu = paineis.find((p) => bate(p.cwd || ""));
-  if (!meu) {
-    const abertos = [...new Set(paineis.map((p) => p.cwd).filter(Boolean))];
-    throw new Error(
-      `nenhum painel do herdr aberto em "${alvo}".\nAbertos agora:\n  ` + abertos.join("\n  "),
-    );
+  const workspaces = herdr("workspace", "list").workspaces || [];
+  const paineis = herdr("pane", "list").panes || [];
+  // 1) preferir o workspace cujo RÓTULO (raiz) É o projeto — esse é git de verdade.
+  //    Evita pegar um workspace "~" só porque um pane dele deu `cd` pra dentro do projeto
+  //    (aí `worktree create` falha com not_git_worktree). Achado 24/08 com sessão "eu".
+  let ws = workspaces.find((w) => { const l = String(w.label || ""); return l === base || l.split("/").pop() === base; });
+  // 2) fallback: pela cwd de algum pane (comportamento antigo)
+  if (!ws) {
+    const p = paineis.find((p) => bate(p.cwd || ""));
+    if (p) ws = workspaces.find((w) => w.workspace_id === p.workspace_id) || { workspace_id: p.workspace_id };
   }
-  return { workspace: meu.workspace_id, repo: meu.cwd };
+  if (!ws) {
+    const rotulos = [...new Set(workspaces.map((w) => w.label).filter(Boolean))];
+    throw new Error(`nenhum workspace do herdr no projeto "${base}".\nWorkspaces abertos:\n  ` + rotulos.join("\n  "));
+  }
+  const pane = paineis.find((p) => p.workspace_id === ws.workspace_id && bate(p.cwd || ""))
+            || paineis.find((p) => p.workspace_id === ws.workspace_id);
+  return { workspace: ws.workspace_id, repo: (pane && pane.cwd) || base };
 }
 
 /** Os repositórios que a obra alcança agora (um workspace aberto = um projeto disponível). */
