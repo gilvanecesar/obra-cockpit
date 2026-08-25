@@ -27,7 +27,7 @@
  *   node scripts/obra.mjs tarefa mover <id> <estado>
  */
 import { execFileSync } from "child_process";
-import { readFileSync, existsSync, writeFileSync } from "fs";
+import { readFileSync, existsSync, writeFileSync, symlinkSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import {
@@ -257,13 +257,27 @@ function abrir(nome, texto, papel = "engenheiro", a4, a5) {
   const caminho = wt.worktree.path;
   confiarPasta(caminho); // marca a cópia como confiável → o claude não trava no "confia nesta pasta?"
 
+  // node_modules na cópia: worktree é um checkout git LIMPO (sem node_modules), então build/teste
+  // falham ("tsc: not found"). Linka o node_modules do projeto de origem — sem reinstalar.
+  // ⚠️ o `.gitignore` do projeto precisa ter `node_modules` (sem barra) pra não versionar o link.
+  try {
+    const nmOrig = resolve(repo, "node_modules"), nmCopia = resolve(caminho, "node_modules");
+    if (existsSync(nmOrig) && !existsSync(nmCopia)) symlinkSync(nmOrig, nmCopia);
+  } catch (e) { /* segue; a tarefa avisa se faltar */ }
+
   // 2) o agente sobe NO painel, sem parar para pedir permissão (está isolado no galho)
   esperarShell(pane);
   const extraClaude = ["--dangerously-skip-permissions"];
   if (MODELO) extraClaude.push("--model", MODELO); // multi-modelos: cada tarefa pode ter o seu
   // ⚠️ o claude agora carrega ai-memory (MCP) + skills no boot e passa dos 30s padrão do herdr
   // ("timed out waiting for agent startup"). Damos 120s (o herdr aceita até 300s).
-  herdr("agent", "start", nome, "--kind", "claude", "--pane", pane, "--timeout", "120000", "--", ...extraClaude);
+  // Se falhar, REMOVE a cópia — senão fica worktree órfão acumulando (achado 25/08).
+  try {
+    herdr("agent", "start", nome, "--kind", "claude", "--pane", pane, "--timeout", "120000", "--", ...extraClaude);
+  } catch (e) {
+    try { herdr("worktree", "remove", "--workspace", workspace, "--force"); } catch (_) { /* ok */ }
+    throw new Error(`o agente não subiu (${e.message}) — cópia removida`);
+  }
 
   // 3) a tarefa
   /**

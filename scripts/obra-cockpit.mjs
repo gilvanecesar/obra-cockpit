@@ -247,17 +247,30 @@ function atualizarStatusTarefas() {
 setInterval(atualizarStatusTarefas, 4000);
 try { atualizarStatusTarefas(); } catch { /* ok */ }
 
-// os agentes vivos da obra (registro em disco) viram os cards da torre
+// tarefas "subindo"/"erro" (criação em andamento) — em memória; some quando o registro assume
+const lancando = new Map();
+function extrairErro(out) {
+  const m = String(out || "").match(/erro:\s*(.+)/i);
+  return (m ? m[1] : String(out || "").slice(-200)).replace(/\s+/g, " ").trim().slice(0, 200);
+}
+// os agentes vivos da obra (registro em disco) + os que estão subindo viram os cards da torre
 function lerTarefas() {
+  let doReg = [];
   try {
     const r = JSON.parse(readFileSync(resolve(RAIZ, ".herdr-obra.json"), "utf8"));
     const ag = r.agentes || {};
-    return Object.entries(ag).map(([nome, a]) => ({
+    doReg = Object.entries(ag).map(([nome, a]) => ({
       nome, projeto: a.projeto || null, modelo: a.modelo || null, papel: a.papel || null,
       tarefa: a.tarefa || "", pane: a.pane || null, workspace: a.workspace || null,
-      status: (a.workspace && wsStatusCache[a.workspace]) || null, aberto_em: a.aberto_em || null,
-    })).sort((x, y) => String(y.aberto_em).localeCompare(String(x.aberto_em)));
-  } catch { return []; }
+      status: (a.workspace && wsStatusCache[a.workspace]) || null, erro: null, aberto_em: a.aberto_em || null,
+    }));
+  } catch { doReg = []; }
+  const nomes = new Set(doReg.map((t) => t.nome));
+  const doLanc = [...lancando.values()].filter((l) => !nomes.has(l.nome)).map((l) => ({
+    nome: l.nome, projeto: l.projeto, modelo: l.modelo, papel: "solo",
+    tarefa: l.tarefa, pane: null, workspace: null, status: l.estado, erro: l.erro || null, aberto_em: l.em,
+  }));
+  return [...doLanc, ...doReg].sort((x, y) => String(y.aberto_em).localeCompare(String(x.aberto_em)));
 }
 
 // ---- status do hardware do saturno (a máquina onde o cockpit roda) ----
@@ -788,6 +801,10 @@ h1 b{color:var(--ciano)}
 .tfechar{border-color:var(--linha)!important;color:var(--muted)!important}
 .tsaida{margin:0;padding:8px 12px;border-top:1px solid var(--linha);background:#0c0c0f;color:var(--muted);font:12px/1.5 var(--mono,monospace);white-space:pre-wrap;max-height:170px;overflow:auto}
 .tref{background:transparent;border:1px solid var(--linha);color:var(--muted);padding:6px 10px;cursor:pointer;font-size:13px}
+.b-err{color:var(--verm);border-color:var(--verm)}
+.tcarderr{border-left-color:var(--verm)!important}
+.tsaida.terro{color:var(--verm)}
+.tsubindo{padding:10px 12px;border-top:1px solid var(--linha);color:var(--ciano);font-size:12.5px}
 .mhead{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
 .mhead .proj{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ciano);border:1px solid var(--linha);padding:2px 8px}
 .mhead .obj{flex:1 1 260px;color:var(--gelo);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1168,6 +1185,8 @@ async function fecharTarefa(nome){
 }
 function tarefaStatus(s){
   s=String(s||"").toLowerCase();
+  if(s==="subindo") return {t:"subindo…",c:"b-on"};
+  if(s==="erro") return {t:"erro",c:"b-err"};
   if(s==="running"||s==="busy"||s==="working"||s==="thinking") return {t:"trabalhando",c:"b-on"};
   if(s==="done"||s==="finished") return {t:"pronto",c:"b-off"};
   if(s==="idle"||s==="waiting"||s==="ready") return {t:"aguardando",c:"b-off"};
@@ -1182,21 +1201,32 @@ async function atualizarSaida(nome){
 }
 function tarefaCard(t){
   var st=tarefaStatus(t.status);
-  return '<div class="mcard tcard" data-nome="'+esc(t.nome)+'">'+
+  var fechar='<button class="tfechar" onclick="fecharTarefa(&quot;'+esc(t.nome)+'&quot;)" title="encerrar/descartar">✕</button>';
+  var corpo;
+  if(t.status==="erro"){
+    corpo='<pre class="tsaida terro">'+esc(t.erro||"não consegui lançar")+'</pre>'+
+      '<div class="tfalar"><span class="tpane">falhou ao subir</span>'+fechar+'</div>';
+  } else if(t.status==="subindo"){
+    corpo='<div class="tsubindo">subindo… abrindo a cópia + carregando memória/skills (~1min)</div>'+
+      '<div class="tfalar"><span class="tpane">aguarde</span>'+fechar+'</div>';
+  } else {
+    corpo='<pre class="tsaida" id="saida-'+esc(t.nome)+'">(fale ou clique ↻ pra ver a resposta da tarefa)</pre>'+
+      '<div class="tfalar">'+
+        '<input maxlength="4000" placeholder="fala com esta tarefa… (Enter envia)" onkeydown="if(event.key===&quot;Enter&quot;)falarTarefa(&quot;'+esc(t.nome)+'&quot;)">'+
+        '<button onclick="falarTarefa(&quot;'+esc(t.nome)+'&quot;)">enviar</button>'+
+        '<button class="tref" onclick="atualizarSaida(&quot;'+esc(t.nome)+'&quot;)" title="atualizar a saída da tarefa">↻</button>'+
+        '<span class="tpane" title="abra este pane no herdr pra conversar direto">herdr: '+esc(t.pane||"?")+'</span>'+
+        fechar+
+      '</div>';
+  }
+  return '<div class="mcard tcard'+(t.status==="erro"?" tcarderr":"")+'" data-nome="'+esc(t.nome)+'">'+
     '<div class="mhead"><span class="proj torretag">TAREFA</span>'+
       (t.projeto?'<span class="proj">'+esc(t.projeto)+'</span>':'')+
       (t.modelo?'<span class="proj modelo">'+esc(t.modelo)+'</span>':'')+
       '<span class="obj">'+esc(t.tarefa)+'</span>'+
       '<span class="badge '+st.c+'">'+esc(st.t)+'</span>'+
       '<span class="custo">'+quando(t.aberto_em)+'</span></div>'+
-    '<pre class="tsaida" id="saida-'+esc(t.nome)+'">(fale ou clique ↻ pra ver a resposta da tarefa)</pre>'+
-    '<div class="tfalar">'+
-      '<input maxlength="4000" placeholder="fala com esta tarefa… (Enter envia)" onkeydown="if(event.key===&quot;Enter&quot;)falarTarefa(&quot;'+esc(t.nome)+'&quot;)">'+
-      '<button onclick="falarTarefa(&quot;'+esc(t.nome)+'&quot;)">enviar</button>'+
-      '<button class="tref" onclick="atualizarSaida(&quot;'+esc(t.nome)+'&quot;)" title="atualizar a saída da tarefa">↻</button>'+
-      '<span class="tpane" title="abra este pane no herdr pra conversar direto">herdr: '+esc(t.pane||"?")+'</span>'+
-      '<button class="tfechar" onclick="fecharTarefa(&quot;'+esc(t.nome)+'&quot;)" title="encerrar tarefa">✕</button>'+
-    '</div></div>';
+    corpo+'</div>';
 }
 var _tarefasSig="";
 function pintarTarefas(tarefas){
@@ -1206,7 +1236,7 @@ function pintarTarefas(tarefas){
   var foco=document.activeElement;
   if(foco && el.contains(foco)) return;
   // ...e só repinta quando a LISTA muda de verdade (evita churn e piscar do DOM).
-  var sig=JSON.stringify((tarefas||[]).map(function(t){return [t.nome,t.projeto,t.modelo,t.tarefa,t.pane,t.status]}));
+  var sig=JSON.stringify((tarefas||[]).map(function(t){return [t.nome,t.projeto,t.modelo,t.tarefa,t.pane,t.status,t.erro]}));
   if(sig===_tarefasSig) return;
   _tarefasSig=sig;
   el.innerHTML=(tarefas&&tarefas.length)?tarefas.map(tarefaCard).join(""):'';
@@ -1737,10 +1767,14 @@ createServer(async (req, res) => {
       const projeto = b.projeto ? String(b.projeto).slice(0, 60) : "querofretes-ofc";
       const modelo = b.modelo ? String(b.modelo).slice(0, 30) : null;
       const nome = "t" + Date.now().toString(36);
+      // registra "subindo" na hora → o card aparece já; a criação corre em SEGUNDO PLANO (não trava a resposta)
+      lancando.set(nome, { nome, projeto, modelo, tarefa: texto, estado: "subindo", em: new Date().toISOString() });
       const args = ["abrir", nome, texto, "solo", projeto, ...(modelo ? ["--modelo", modelo] : [])];
-      const r = await rodarObra(args);
-      if (r.code !== 0) return json(502, { erro: "não consegui lançar", detalhe: r.out.slice(0, 800) });
-      return json(201, { nome, projeto, modelo, saida: r.out.slice(0, 800) });
+      rodarObra(args).then((r) => {
+        if (r.code === 0) { lancando.delete(nome); atualizarStatusTarefas(); } // o registro real assume o card
+        else { const c = lancando.get(nome); if (c) lancando.set(nome, { ...c, estado: "erro", erro: extrairErro(r.out) }); }
+      }).catch((e) => { const c = lancando.get(nome); if (c) lancando.set(nome, { ...c, estado: "erro", erro: String((e && e.message) || e) }); });
+      return json(201, { nome, estado: "subindo" });
     } catch (e) { return json(400, { erro: e.message }); }
   }
   // Torre: manda uma linha pra uma tarefa (herdr agent prompt, via obra falar)
@@ -1772,6 +1806,7 @@ createServer(async (req, res) => {
       const b = await lerCorpo(req);
       const nome = String(b.nome || "").trim();
       if (!nome) return json(400, { erro: "faltou nome" });
+      lancando.delete(nome); // descarta card de "subindo/erro" também
       const r = await rodarObra(["fechar", nome]);
       return json(200, { ok: r.code === 0, saida: r.out.slice(0, 400) });
     } catch (e) { return json(400, { erro: e.message }); }
