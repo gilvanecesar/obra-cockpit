@@ -215,6 +215,33 @@ const salvarDiretos = (a) => writeFileSync(DIRETOS, JSON.stringify(a.slice(-30),
 // só os que interessam: trabalhando + os que terminaram nos últimos 90s
 const diretosVivos = () => lerDiretos().filter((d) => d.status !== "terminou" || (d.fim && Date.now() - new Date(d.fim).getTime() < 90000));
 
+// ---- Torre de tarefas: o dono lança uma tarefa "solo" (um eu fazedor num pane), escolhe o
+//      modelo, vê o card ao vivo e pode falar com ela. Reusa o obra.mjs (que lida com o herdr). ----
+const OBRA = resolve(RAIZ, "scripts/obra.mjs");
+const NODE = process.execPath;
+// roda o obra.mjs e devolve {code, out} — o obra cria o worktree/pane e sobe o agente
+function rodarObra(args) {
+  return new Promise((ok) => {
+    const cp = spawn(NODE, [OBRA, ...args], { cwd: RAIZ, env: process.env });
+    let out = "";
+    cp.stdout.on("data", (d) => { out += d; });
+    cp.stderr.on("data", (d) => { out += d; });
+    cp.on("close", (code) => ok({ code, out: out.trim() }));
+    cp.on("error", (e) => ok({ code: 1, out: String(e && e.message || e) }));
+  });
+}
+// os agentes vivos da obra (registro em disco) viram os cards da torre
+function lerTarefas() {
+  try {
+    const r = JSON.parse(readFileSync(resolve(RAIZ, ".herdr-obra.json"), "utf8"));
+    const ag = r.agentes || {};
+    return Object.entries(ag).map(([nome, a]) => ({
+      nome, projeto: a.projeto || null, modelo: a.modelo || null, papel: a.papel || null,
+      tarefa: a.tarefa || "", pane: a.pane || null, aberto_em: a.aberto_em || null,
+    })).sort((x, y) => String(y.aberto_em).localeCompare(String(x.aberto_em)));
+  } catch { return []; }
+}
+
 // ---- status do hardware do saturno (a máquina onde o cockpit roda) ----
 // Lê /proc (CPU/RAM, instantâneo) e nvidia-smi (GPU, async). Cache de ~3s pra não spammar.
 let maquinaCache = null;
@@ -262,6 +289,7 @@ function retrato() {
     conta,
     maquina: maquinaCache,
     diretos: diretosVivos(),
+    tarefas: lerTarefas(),
     em: new Date().toISOString(),
   };
 }
@@ -722,6 +750,24 @@ h1 b{color:var(--ciano)}
 .mcard.direto{border-left:3px solid var(--ciano)}
 .mhead .proj.bossdir{color:var(--ciano);border-color:var(--ciano);font-weight:700}
 .datv{padding:10px 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
+/* Torre de tarefas (peça 2) */
+.torre{border:1px solid var(--linha);background:var(--painel);margin-bottom:14px}
+.torrehd{padding:9px 14px;border-bottom:1px solid var(--linha);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ciano);font-weight:700}
+.torrehint{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px}
+.torrelanc{display:flex;gap:8px;align-items:center;padding:12px 14px;flex-wrap:wrap}
+.torrelanc input{flex:1 1 320px;background:#101014;border:1px solid var(--linha);color:var(--gelo);padding:8px 10px;font:inherit;font-size:13px}
+.torrelanc select{background:#101014;border:1px solid var(--linha);color:var(--gelo);padding:8px;font:inherit;font-size:12px}
+.torrelanc button{background:var(--ciano);color:#17171a;border:0;padding:8px 16px;font-weight:700;cursor:pointer}
+.tarefaAviso{font-size:12px;color:var(--muted)}
+.tarefas{display:flex;flex-direction:column;gap:8px;padding:0 14px 12px}
+.tcard{border-left:3px solid var(--ciano)}
+.mhead .proj.torretag{color:var(--ciano);border-color:var(--ciano);font-weight:700}
+.mhead .proj.modelo{color:var(--verde);border-color:var(--verde)}
+.tfalar{display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--linha);flex-wrap:wrap}
+.tfalar input{flex:1 1 200px;background:#101014;border:1px solid var(--linha);color:var(--gelo);padding:6px 9px;font:inherit;font-size:12.5px}
+.tfalar button{background:transparent;border:1px solid var(--ciano);color:var(--ciano);padding:6px 12px;cursor:pointer;font-size:12px}
+.tpane{font-size:11px;color:var(--muted)}
+.tfechar{border-color:var(--linha)!important;color:var(--muted)!important}
 .mhead{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
 .mhead .proj{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ciano);border:1px solid var(--linha);padding:2px 8px}
 .mhead .obj{flex:1 1 260px;color:var(--gelo);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -865,6 +911,28 @@ h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#9399
   <span class="cap" id="cap"></span>
   <div id="aviso"></div>
 </div>
+<div class="torre">
+  <div class="torrehd">TORRE · tarefas em paralelo <span class="torrehint">lança, vê rodando, fala com cada uma — cada tarefa é um eu no seu pane</span></div>
+  <div class="torrelanc">
+    <input id="tarefaTexto" maxlength="4000" placeholder="Nova tarefa (ex.: corrige o bug X no querofretes)… — Cmd+Enter lança">
+    <select id="tarefaProjeto" title="em qual projeto (precisa estar aberto no herdr)">
+      <option value="querofretes-ofc">querofretes-ofc</option>
+      <option value="TMS">TMS</option>
+      <option value="agb-projetos">agb-projetos</option>
+      <option value="torre">torre</option>
+      <option value="obra-cockpit">obra-cockpit</option>
+    </select>
+    <select id="tarefaModelo" title="qual modelo atende esta tarefa">
+      <option value="">modelo: auto</option>
+      <option value="sonnet">sonnet</option>
+      <option value="opus">opus</option>
+      <option value="haiku">haiku</option>
+    </select>
+    <button id="lancarTarefa">Lançar</button>
+    <span class="tarefaAviso" id="tarefaAviso"></span>
+  </div>
+  <div class="tarefas" id="tarefas"></div>
+</div>
 <div class="missoes" id="missoes"></div>
 <h2 class="secao" id="hsec" style="display:none">Missões anteriores</h2>
 <div class="historico" id="historico"></div>
@@ -977,6 +1045,8 @@ async function acionar(forcar){
   obj.value="";
 }
 document.getElementById("rodar").onclick=()=>acionar(false);
+document.getElementById("lancarTarefa").onclick=lancarTarefa;
+document.getElementById("tarefaTexto").addEventListener("keydown",function(e){ if((e.metaKey||e.ctrlKey)&&e.key==="Enter") lancarTarefa(); });
 
 function role(p){
   const reprovou=p.step==="terminou"&&p.chave==="revisor"&&/REPROVADO/i.test(p.resultado||"");
@@ -1043,6 +1113,53 @@ function diretoCard(d){
       '<span class="custo">'+quando(d.comecou)+'</span></div>'+
     ((d.resultado||d.atividade)?'<div class="datv">'+esc(d.resultado||d.atividade)+'</div>':'')+
     '</div>';
+}
+
+// ---- Torre de tarefas (peça 2): lançar em paralelo, ver cards ao vivo, falar com cada uma ----
+async function lancarTarefa(){
+  var texto=document.getElementById("tarefaTexto").value.trim();
+  var projeto=document.getElementById("tarefaProjeto").value;
+  var modelo=document.getElementById("tarefaModelo").value;
+  var av=document.getElementById("tarefaAviso");
+  if(!texto){ av.textContent="escreva a tarefa"; return; }
+  av.textContent="lançando…";
+  try{
+    var r=await fetch("/tarefa",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({texto:texto,projeto:projeto,modelo:modelo})});
+    var j=await r.json();
+    if(!r.ok){ av.textContent=j.erro||"falhou"; av.title=j.detalhe||""; return; }
+    document.getElementById("tarefaTexto").value=""; av.textContent="lançada ✓ ("+j.nome+")"; av.title=""; setTimeout(function(){av.textContent="";},4000);
+  }catch(e){ av.textContent="erro ao lançar"; }
+}
+async function falarTarefa(nome){
+  var card=document.querySelector('.tcard[data-nome="'+nome+'"]');
+  if(!card) return; var inp=card.querySelector(".tfalar input");
+  var texto=inp.value.trim(); if(!texto) return;
+  inp.disabled=true;
+  try{ await fetch("/tarefa/falar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:nome,texto:texto})}); inp.value=""; }catch(e){}
+  inp.disabled=false; inp.focus();
+}
+async function fecharTarefa(nome){
+  if(!confirm("Encerrar a tarefa "+nome+"? (remove a cópia do repositório)")) return;
+  try{ await fetch("/tarefa/fechar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:nome})}); }catch(e){}
+}
+function tarefaCard(t){
+  return '<div class="mcard tcard rodando" data-nome="'+esc(t.nome)+'">'+
+    '<div class="mhead"><span class="proj torretag">TAREFA</span>'+
+      (t.projeto?'<span class="proj">'+esc(t.projeto)+'</span>':'')+
+      (t.modelo?'<span class="proj modelo">'+esc(t.modelo)+'</span>':'')+
+      '<span class="obj">'+esc(t.tarefa)+'</span>'+
+      '<span class="badge b-on">rodando</span>'+
+      '<span class="custo">'+quando(t.aberto_em)+'</span></div>'+
+    '<div class="tfalar">'+
+      '<input maxlength="4000" placeholder="fala com esta tarefa… (Enter envia)" onkeydown="if(event.key===&quot;Enter&quot;)falarTarefa(&quot;'+esc(t.nome)+'&quot;)">'+
+      '<button onclick="falarTarefa(&quot;'+esc(t.nome)+'&quot;)">enviar</button>'+
+      '<span class="tpane" title="abra este pane no herdr pra conversar direto">herdr: '+esc(t.pane||"?")+'</span>'+
+      '<button class="tfechar" onclick="fecharTarefa(&quot;'+esc(t.nome)+'&quot;)" title="encerrar tarefa">✕</button>'+
+    '</div></div>';
+}
+function pintarTarefas(tarefas){
+  var el=document.getElementById("tarefas"); if(!el) return;
+  el.innerHTML=(tarefas&&tarefas.length)?tarefas.map(tarefaCard).join(""):'';
 }
 
 function quando(iso){ if(!iso) return ""; const m=Math.floor((Date.now()-new Date(iso))/60000);
@@ -1136,6 +1253,7 @@ function render(d){
   document.getElementById("relogio").textContent=new Date(d.em).toLocaleTimeString("pt-BR");
   pintarConta(d.conta, d.gasto);
   pintarMaquina(d.maquina);
+  pintarTarefas(d.tarefas);
   const cheio=d.ativas>=d.max;
   document.getElementById("rodar").disabled=cheio;
   document.getElementById("cap").textContent=d.ativas?(d.ativas+"/"+d.max+" rodando"):"";
@@ -1557,6 +1675,45 @@ createServer(async (req, res) => {
         titulo: String(b.titulo || "(sem título)").slice(0, 200), projeto: b.projeto ? String(b.projeto).slice(0, 40) : null,
         status: "trabalhando", atividade: b.atividade ? String(b.atividade).slice(0, 200) : null, comecou: nowISO };
       lista.push(d); salvarDiretos(lista); return json(201, d);
+    } catch (e) { return json(400, { erro: e.message }); }
+  }
+  // Torre: lança uma tarefa "solo" (um eu fazedor num pane), com modelo escolhido
+  if (req.method === "POST" && req.url === "/tarefa") {
+    try {
+      const b = await lerCorpo(req);
+      const texto = String(b.texto || "").trim();
+      if (!texto) return json(400, { erro: "escreva a tarefa" });
+      if (texto.length > 4000) return json(400, { erro: "tarefa grande demais" });
+      const projeto = b.projeto ? String(b.projeto).slice(0, 60) : "querofretes-ofc";
+      const modelo = b.modelo ? String(b.modelo).slice(0, 30) : null;
+      const nome = "t" + Date.now().toString(36);
+      const args = ["abrir", nome, texto, "solo", projeto, ...(modelo ? ["--modelo", modelo] : [])];
+      const r = await rodarObra(args);
+      if (r.code !== 0) return json(502, { erro: "não consegui lançar", detalhe: r.out.slice(0, 800) });
+      return json(201, { nome, projeto, modelo, saida: r.out.slice(0, 800) });
+    } catch (e) { return json(400, { erro: e.message }); }
+  }
+  // Torre: manda uma linha pra uma tarefa (herdr agent prompt, via obra falar)
+  if (req.method === "POST" && req.url === "/tarefa/falar") {
+    try {
+      const b = await lerCorpo(req);
+      const nome = String(b.nome || "").trim();
+      const texto = String(b.texto || "").trim();
+      if (!nome || !texto) return json(400, { erro: "faltou nome ou texto" });
+      if (texto.length > 4000) return json(400, { erro: "texto grande demais" });
+      const r = await rodarObra(["falar", nome, texto]);
+      if (r.code !== 0) return json(502, { erro: "não consegui falar com a tarefa", detalhe: r.out.slice(0, 400) });
+      return json(200, { ok: true });
+    } catch (e) { return json(400, { erro: e.message }); }
+  }
+  // Torre: encerra uma tarefa (remove a cópia e o pane)
+  if (req.method === "POST" && req.url === "/tarefa/fechar") {
+    try {
+      const b = await lerCorpo(req);
+      const nome = String(b.nome || "").trim();
+      if (!nome) return json(400, { erro: "faltou nome" });
+      const r = await rodarObra(["fechar", nome]);
+      return json(200, { ok: r.code === 0, saida: r.out.slice(0, 400) });
     } catch (e) { return json(400, { erro: e.message }); }
   }
   /**
