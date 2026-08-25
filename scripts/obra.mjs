@@ -238,7 +238,9 @@ function abrir(nome, texto, papel = "engenheiro", a4, a5) {
   esperarShell(pane);
   const extraClaude = ["--dangerously-skip-permissions"];
   if (MODELO) extraClaude.push("--model", MODELO); // multi-modelos: cada tarefa pode ter o seu
-  herdr("agent", "start", nome, "--kind", "claude", "--pane", pane, "--", ...extraClaude);
+  // ⚠️ o claude agora carrega ai-memory (MCP) + skills no boot e passa dos 30s padrão do herdr
+  // ("timed out waiting for agent startup"). Damos 120s (o herdr aceita até 300s).
+  herdr("agent", "start", nome, "--kind", "claude", "--pane", pane, "--timeout", "120000", "--", ...extraClaude);
 
   // 3) a tarefa
   /**
