@@ -731,876 +731,254 @@ function lerCorpo(req, limite = 8 * 1024) {
 }
 
 const PAGINA = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Cockpit · Obra</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Torre de Controle</title>
 <style>
+:root{--bg:#0b0b0f;--panel:#141419;--panel2:#1a1a21;--bd:#262630;--tx:#e8e8ee;--mut:#8a8a99;--dim:#5c5c6a;--accent:#cba6f7;--work:#56c8dc;--idle:#6b6b7a;--ok:#37cf7c;--amb:#e5c07b;--red:#eb6e6e}
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--marinho:${MARINHO};--ciano:${CIANO};--verde:${VERDE};--gelo:${GELO};--ambar:${AMBAR};--verm:${VERM};--linha:#35353d;--painel:#1e1e22;--muted:#9399b2;
- --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--sans:"Inter",system-ui,-apple-system,sans-serif;--display:"Archivo",var(--sans)}
-body{background:var(--marinho);color:var(--gelo);font:14px/1.5 var(--mono);min-height:100vh}
-header{display:flex;align-items:center;gap:16px;padding:16px 24px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
-h1{font-family:var(--display);font-size:17px;letter-spacing:.06em;color:var(--gelo);font-weight:900}
-h1 b{color:var(--ciano)}
-.abas{display:flex;gap:6px}
-.aba{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#9399b2;padding:6px 12px;border:1px solid var(--linha);
- background:transparent;cursor:pointer;font-family:inherit}
-.aba.on{color:var(--marinho);background:var(--ciano);border-color:var(--ciano);font-weight:700}
-.aba.mais{color:var(--verde);border-style:dashed}
-.aba.mais:hover{background:var(--verde);color:var(--marinho)}
-.aba.boss{color:var(--ciano);border-color:var(--ciano)}
-.aba.boss:hover{background:var(--ciano);color:var(--marinho)}
-.aba.ver{color:var(--verde);border-color:var(--verde)}
-.aba.ver:hover{background:var(--verde);color:var(--marinho)}
-.aba.fluxo{color:var(--ciano);border-color:var(--linha)}
-.aba.fluxo:hover{border-color:var(--ciano)}
-#conta{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:11px;color:#9399b2;white-space:nowrap}
-#conta b{font-weight:700}
-#conta .plano{color:var(--ciano);letter-spacing:.06em}
-#relogio{font-size:11px;color:#9399b2}
-#ver{font-size:10px;color:var(--verde);border:1px solid var(--linha);padding:2px 7px;letter-spacing:.06em}
-.maquina{display:flex;gap:22px;align-items:center;flex-wrap:wrap;padding:9px 24px;border-bottom:1px solid var(--linha);font-size:11px}
-.maquina .mqhost{color:var(--ciano);letter-spacing:.1em;font-weight:700;text-transform:uppercase}
-.mqcell{display:flex;flex-direction:column;gap:3px;min-width:130px}
-.mql{color:var(--muted);letter-spacing:.04em}
-.mqv{color:var(--gelo)}
-.mqw{color:var(--verm);text-transform:uppercase;font-size:9px;letter-spacing:.08em}
-.mqbar{display:block;height:3px;background:#2a2a30;width:100%;margin-top:1px}
-.mqbar>span{display:block;height:100%}
-
-/* chat do Boss — painel inferior */
-.chat{position:fixed;bottom:0;left:0;right:0;width:100%;max-height:50vh;background:var(--painel);
- border-top:1px solid var(--muted);display:flex;flex-direction:column;transform:translateY(100%);
- transition:transform .18s;z-index:20;
- font-family:"JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
- font-weight:300}
-.chat.on{transform:translateY(0)}
-.chatcab{padding:14px 16px;border-bottom:1px solid var(--linha);font-size:12px;letter-spacing:.14em;
- color:var(--muted);font-weight:600;display:flex;align-items:center;gap:10px}
-.chatsub{font-size:10px;letter-spacing:.06em;color:#9399b2;font-weight:300;text-transform:none}
-.chatcab button{margin-left:auto;background:transparent;border:0;color:#9399b2;cursor:pointer;font-size:16px}
-.chatmsgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:18px}
-.msg{max-width:88%;padding:12px 14px;font-size:13px;font-weight:300;line-height:1.85;white-space:pre-wrap;word-break:break-word}
-.msg.voce{align-self:flex-end;background:#0e2233;border:1px solid var(--linha);color:var(--gelo)}
-.msg.boss{align-self:flex-start;background:#24242a;border:1px solid #35353d;color:var(--gelo)}
-.msg.pensando{align-self:flex-start;color:#9399b2;font-style:italic}
-.chatvazio{color:#9399b2;text-align:center;margin:auto;font-size:12px;padding:20px;line-height:1.7}
-.anexos{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
-.anexo{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--gelo);
- border:1px solid #35353d;background:#1e1e22;padding:3px 8px}
-.chatanexos{display:none;flex-wrap:wrap;gap:6px;padding:0 12px 10px}
-.chatanexos .anexo{color:var(--ciano);border-color:var(--linha)}
-.chatanexos .anexo b{cursor:pointer;color:var(--verm);font-weight:700}
-.chatentrada{border-top:1px solid var(--linha);padding:12px;display:flex;gap:8px}
-#chatAnexar{background:transparent;border:1px solid var(--linha);color:#9399b2;cursor:pointer;
- font-size:15px;padding:0 12px;align-self:stretch}
-#chatAnexar:hover{border-color:var(--muted);color:var(--muted)}
-.chatentrada textarea{flex:1;min-height:44px;max-height:140px;resize:vertical;background:#1e1e22;
- border:1px solid var(--linha);color:var(--gelo);padding:10px 12px;
- font:300 13px/1.7 "JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace}
-.chatentrada textarea:focus{outline:none;border-color:var(--muted)}
-.chatentrada button{background:transparent;border:1px solid var(--muted);color:var(--muted);padding:0 16px;
- cursor:pointer;font:300 11px/1 "JetBrainsMono Nerd Font","JetBrains Mono NF","JetBrains Mono",ui-monospace,monospace;
- letter-spacing:.1em;text-transform:uppercase}
-.chatentrada button:hover:not(:disabled){background:var(--muted);color:var(--marinho)}
-.chatentrada button:disabled{opacity:.4;cursor:default}
-
-/* modal de novo projeto */
-.modal{position:fixed;inset:0;background:rgba(3,8,15,.8);display:none;align-items:center;justify-content:center;z-index:10}
-.modal.on{display:flex}
-.cxmodal{background:var(--painel);border:1px solid var(--ciano);width:min(520px,92vw);padding:22px}
-.mtit{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--ciano);font-weight:700;margin-bottom:16px}
-.modo{display:flex;border:1px solid var(--linha);margin-bottom:16px}
-.modo button{flex:1;background:transparent;color:#9399b2;border:0;padding:9px;cursor:pointer;font:11px/1 "JetBrains Mono",monospace;letter-spacing:.08em}
-.modo button.on{background:var(--ciano);color:var(--marinho);font-weight:700}
-.cxmodal label{display:block;font-size:11px;color:#9399b2;margin:10px 0 5px}
-.cxmodal .dica{color:#9399b2;font-weight:400;text-transform:none;letter-spacing:0}
-.cxmodal input,.cxmodal select{width:100%;background:#1e1e22;border:1px solid var(--linha);color:var(--gelo);
- padding:9px 11px;font:13px/1.4 "JetBrains Mono",Menlo,monospace}
-.cxmodal input:focus,.cxmodal select:focus{outline:none;border-color:var(--ciano)}
-.mbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
-.mbtns button{border:1px solid;background:transparent;padding:9px 18px;cursor:pointer;font:11px/1 "JetBrains Mono",monospace;letter-spacing:.12em;text-transform:uppercase}
-.mbtns .cancelar{color:#9399b2;border-color:var(--linha)}
-.mbtns .ok{color:var(--verde);border-color:var(--verde)}
-.mbtns .ok:hover{background:var(--verde);color:var(--marinho)}
-#modalAviso{font-size:11px;color:var(--verm);margin-top:10px;min-height:0}
-
-/* heatmap de gasto (dia × hora) */
-.mapa{padding:0 24px 30px;overflow-x:auto}
-.mapa table{border-collapse:collapse;font-size:10px;color:#9399b2;width:100%}
-.mapa td,.mapa th{padding:0}
-.mapa .dia{padding-right:10px;text-align:right;color:#9399b2;white-space:nowrap;font-size:11px;width:1%}
-/* sem largura fixa: as 24 colunas de hora dividem a largura da tabela e enchem a linha */
-.mapa .cel{height:20px;border:1px solid var(--marinho)}
-.mapa .tot{padding-left:12px;text-align:right;color:var(--verde);white-space:nowrap;font-weight:700;font-size:11px;width:1%}
-.mapa .eixo{color:#9399b2;font-size:10px;text-align:left;padding-top:4px}
-.mapa .legenda{display:flex;gap:16px;align-items:center;margin-top:12px;font-size:11px;color:#9399b2;flex-wrap:wrap}
-.mapa .legenda i{display:inline-block;width:16px;height:12px;margin-right:6px;vertical-align:middle;border:1px solid var(--marinho)}
-
-/* compositor */
-.compositor{padding:16px 24px;border-bottom:1px solid var(--linha);display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
-.compositor textarea{flex:1 1 420px;min-width:0;min-height:52px;resize:vertical;background:var(--painel);border:1px solid var(--linha);
- color:var(--gelo);padding:10px 12px;font:13px/1.5 "JetBrains Mono",Menlo,monospace}
-.compositor textarea:focus{outline:none;border-color:var(--ciano)}
-.timesel{display:flex;border:1px solid var(--linha)}
-.timesel button{background:transparent;color:#9399b2;border:0;padding:9px 12px;cursor:pointer;font:11px/1 "JetBrains Mono",monospace;letter-spacing:.1em}
-.timesel button.on{background:var(--ciano);color:var(--marinho);font-weight:700}
-#rodar{background:transparent;border:1px solid var(--verde);color:var(--verde);padding:10px 20px;cursor:pointer;
- font:11px/1 "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;align-self:stretch}
-#rodar:hover:not(:disabled){background:var(--verde);color:var(--marinho)}
-#rodar:disabled{opacity:.4;cursor:default}
-#aviso{width:100%;font-size:11px;color:var(--verm);min-height:0}
-
-.e-aguardando{color:#9399b2;border-color:#9399b2}
-.e-trabalhando{color:var(--ciano);border-color:var(--ciano)}
-.e-terminou{color:var(--verde);border-color:var(--verde)}
-.e-reprovou{color:var(--verm);border-color:var(--verm)}
-@keyframes pisca{50%{opacity:.3}}
-.pisca{animation:pisca 1.1s infinite}
-
-/* grid de MISSÕES — cada card é uma missão rodando em paralelo */
-.missoes{padding:12px 24px 20px;display:flex;flex-direction:column;gap:14px}
-.mcard{border:1px solid var(--linha);background:var(--painel)}
-.mcard.rodando{border-color:var(--ciano)}
-.mcard.direto{border-left:3px solid var(--ciano)}
-.mhead .proj.bossdir{color:var(--ciano);border-color:var(--ciano);font-weight:700}
-.datv{padding:10px 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
-/* Torre de tarefas (peça 2) */
-.torre{border:1px solid var(--linha);background:var(--painel);margin-bottom:14px}
-.torrehd{padding:9px 14px;border-bottom:1px solid var(--linha);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ciano);font-weight:700}
-.torrehint{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px}
-.torrelanc{display:flex;gap:8px;align-items:center;padding:12px 14px;flex-wrap:wrap}
-.torrelanc input{flex:1 1 320px;background:#101014;border:1px solid var(--linha);color:var(--gelo);padding:8px 10px;font:inherit;font-size:13px}
-.torrelanc select{background:#101014;border:1px solid var(--linha);color:var(--gelo);padding:8px;font:inherit;font-size:12px}
-.torrelanc button{background:var(--ciano);color:#17171a;border:0;padding:8px 16px;font-weight:700;cursor:pointer}
-.tarefaAviso{font-size:12px;color:var(--muted)}
-.tarefas{display:flex;flex-direction:column;gap:8px;padding:0 14px 12px}
-.tcard{border-left:3px solid var(--ciano)}
-.mhead .proj.torretag{color:var(--ciano);border-color:var(--ciano);font-weight:700}
-.mhead .proj.modelo{color:var(--verde);border-color:var(--verde)}
-.tfalar{display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--linha);flex-wrap:wrap}
-.tfalar input{flex:1 1 200px;background:#101014;border:1px solid var(--linha);color:var(--gelo);padding:6px 9px;font:inherit;font-size:12.5px}
-.tfalar button{background:transparent;border:1px solid var(--ciano);color:var(--ciano);padding:6px 12px;cursor:pointer;font-size:12px}
-.tpane{font-size:11px;color:var(--muted)}
-.tfechar{border-color:var(--linha)!important;color:var(--muted)!important}
-.tsaida{margin:0;padding:8px 12px;border-top:1px solid var(--linha);background:#0c0c0f;color:var(--muted);font:12px/1.5 var(--mono,monospace);white-space:pre-wrap;max-height:170px;overflow:auto}
-.tref{background:transparent;border:1px solid var(--linha);color:var(--muted);padding:6px 10px;cursor:pointer;font-size:13px}
-.b-err{color:var(--verm);border-color:var(--verm)}
-.tcarderr{border-left-color:var(--verm)!important}
-.tsaida.terro{color:var(--verm)}
-.tsubindo{padding:10px 12px;border-top:1px solid var(--linha);color:var(--ciano);font-size:12.5px}
-.thead{cursor:pointer;user-select:none}
-.thead:hover{background:rgba(255,255,255,.02)}
-.tcaret{color:var(--muted);font-size:10px;margin-right:2px}
-.tcard .tbody{display:none}
-.tcard.aberto .tbody{display:block}
-.tcard .mhead{padding:9px 12px}
-.tcard .mhead .custo{color:var(--muted);font-weight:400}
-.mhead{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--linha);flex-wrap:wrap}
-.mhead .proj{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ciano);border:1px solid var(--linha);padding:2px 8px}
-.mhead .obj{flex:1 1 260px;color:var(--gelo);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mhead .badge{font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:2px 9px;border:1px solid}
-.mhead .custo{font-size:13px;color:var(--verde);font-weight:700}
-.b-on{color:var(--ciano);border-color:var(--ciano)}
-.b-off{color:#9399b2;border-color:#9399b2}
-/* os 4 papéis, lado a lado dentro da missão */
-.roles{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--linha)}
-.role{background:var(--painel);padding:10px 12px;min-height:96px;display:flex;flex-direction:column;gap:6px}
-.role.ativo{background:#26262c}
-.role .rt{display:flex;align-items:center;gap:7px}
-.role .rt .emo{font-size:14px}
-.role .rt .nm{font-size:12px;font-weight:700}
-.role .rt .est{margin-left:auto;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border:1px solid}
-.role .ativ{font-size:11px;color:#9399b2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.role .ativ.tool{color:var(--gelo)}
-.role .res{font-size:11px;color:var(--gelo);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.role .rp{margin-top:auto;display:flex;gap:8px;font-size:10px;color:#9399b2}
-.role .rp .cu{margin-left:auto;color:var(--verde)}
-@media(max-width:720px){.roles{grid-template-columns:repeat(2,1fr)}}
-/* mini-grafo do pipeline (Eng→QA→Rev→PR) no topo do card */
-.mgwrap{display:flex;align-items:center;gap:10px;padding:9px 14px 3px;border-bottom:1px solid var(--linha)}
-.mgraf{height:42px;width:auto;max-width:290px;flex:0 0 auto}
-.mg-lb{fill:#6b8299;font:700 8px "JetBrains Mono",monospace;letter-spacing:.05em;text-transform:uppercase}
-.mg-puls{animation:mgpulse 1.15s ease-in-out infinite}
-@keyframes mgpulse{0%,100%{opacity:1}50%{opacity:.4}}
-.mground{font:700 9px "JetBrains Mono",monospace;color:var(--verm);letter-spacing:.06em;white-space:nowrap}
-.vazio{color:#9399b2;text-align:center;padding:50px 24px}
-.vazio b{display:block;color:var(--gelo);font-size:15px;margin-bottom:6px}
-.cap{font-size:11px;color:#9399b2;margin-left:8px}
-/* histórico */
-h2.secao{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#9399b2;padding:14px 24px 8px}
-.historico{padding:0 24px 30px;display:flex;flex-direction:column;gap:6px}
-.hrow{display:flex;align-items:center;gap:12px;border:1px solid var(--linha);background:var(--painel);padding:9px 13px;font-size:12px}
-.hrow .hv{font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border:1px solid;flex:none}
-.hv-aprovado{color:var(--verde);border-color:var(--verde)}
-.hv-reprovado{color:var(--verm);border-color:var(--verm)}
-.hv-terminou{color:var(--ciano);border-color:var(--ciano)}
-.hv-falhou{color:var(--verm);border-color:var(--verm)}
-.hv-interrompida{color:var(--verm);border-color:var(--verm)}
-.hrow .ho{flex:1;color:var(--gelo);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hrow .hp{color:#9399b2;flex:none}
-.hrow .hc{color:var(--verde);flex:none}
-/* histórico expansível */
-.hitem{border:1px solid var(--linha);background:var(--painel)}
-.hitem>summary{list-style:none;cursor:pointer}
-.hitem>summary::-webkit-details-marker{display:none}
-.hitem .hrow{border:0;background:transparent}
-.hitem[open] .hrow{border-bottom:1px solid var(--linha)}
-.hdet{padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:12px}
-.hdet .lin{color:#9399b2}
-.hdet a{color:var(--ciano)}
-.verdiff{background:transparent;border:1px solid var(--linha);color:var(--ciano);cursor:pointer;
- font:10px/1 "JetBrains Mono",monospace;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;margin-left:8px}
-.verdiff:hover{background:var(--ciano);color:var(--marinho)}
-.diffbox{margin-top:8px;max-height:420px;overflow:auto;font:11px/1.45 "JetBrains Mono",Menlo,monospace;border:1px solid var(--linha);background:#0a1219}
-.diffbox:empty{display:none}
-.diffbox .dl{white-space:pre;padding:0 10px}
-.diffbox .add{color:var(--verde);background:rgba(55,207,124,.07)}
-.diffbox .del{color:var(--verm);background:rgba(235,110,110,.07)}
-.diffbox .hh{color:var(--ciano)}
-.diffbox .ff{color:var(--muted);font-weight:700;border-top:1px solid var(--linha);margin-top:4px}
-.diffbox .dim{color:#9399b2}
-.hdet .papel{display:flex;gap:10px;align-items:baseline;border-top:1px solid #24242a;padding-top:7px}
-.hdet .papel .pn{color:var(--gelo);font-weight:700;min-width:92px}
-.hdet .papel .pm{color:var(--muted);min-width:56px}
-.hdet .papel .pr{flex:1;color:#9399b2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.hdet .papel .pc{color:var(--verde)}
-/* chip de nível (tier) */
-.tier{font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border:1px solid;flex:none}
-.tier-leve{color:var(--verde);border-color:var(--verde)}
-.tier-medio{color:var(--ciano);border-color:var(--ciano)}
-.tier-pesado{color:var(--verm);border-color:var(--verm)}
-/* pergunta do conflito */
-.conflito{width:100%;background:#201a1a;border:1px solid var(--verm);padding:12px 14px;margin-top:4px;font-size:13px;color:var(--gelo)}
-.conflito b{color:var(--verm)}
-.conflito .btns{display:flex;gap:8px;margin-top:10px}
-.conflito button{border:1px solid;background:transparent;padding:7px 14px;cursor:pointer;font:11px/1 "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase}
-.conflito .sim{color:var(--verm);border-color:var(--verm)}
-.conflito .nao{color:var(--ciano);border-color:var(--ciano)}
+body{background:var(--bg);color:var(--tx);font:13px/1.55 ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#2c2c37;border-radius:6px}::-webkit-scrollbar-track{background:transparent}
+/* header */
+header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:18px;padding:11px 20px;background:rgba(11,11,15,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--bd)}
+.marca{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.13em;font-size:12px}
+.marca .dot{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok)}
+.marca small{color:var(--dim);font-weight:400;letter-spacing:0}
+.tabs{display:flex;gap:4px;margin-left:6px}
+.tab{padding:6px 14px;border-radius:8px;color:var(--mut);cursor:pointer;font-size:12px;letter-spacing:.03em;border:1px solid transparent;user-select:none}
+.tab:hover{color:var(--tx);background:var(--panel)}
+.tab.on{color:var(--tx);background:var(--panel2);border-color:var(--bd)}
+.tab .k{color:var(--dim);margin-left:6px}
+.right{margin-left:auto;display:flex;align-items:center;gap:16px;color:var(--mut);font-size:12px}
+.right b{color:var(--tx);font-weight:600}
+.bossbtn{padding:6px 13px;border:1px solid var(--bd);border-radius:8px;color:var(--accent);cursor:pointer}
+.bossbtn:hover{background:var(--panel2)}
+main{padding:20px;max-width:1500px;margin:0 auto}
+/* launcher */
+.lanc{display:flex;gap:9px;align-items:center;background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:11px 13px;margin-bottom:18px;flex-wrap:wrap}
+.lanc input,.lanc select{background:var(--panel2);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:9px 11px;font:inherit;font-size:12px}
+.lanc input.obj{flex:1;min-width:240px}
+.lanc select{cursor:pointer;color:var(--mut)}
+.lanc button{background:var(--accent);color:#17111f;border:none;border-radius:8px;padding:9px 16px;font:inherit;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
+.lanc button:hover{filter:brightness(1.08)}
+.lanc button:disabled{opacity:.5;cursor:default}
+.lanc .hint{color:var(--dim);font-size:11px;width:100%;margin-top:-2px}
+/* grade */
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:13px}
+.card{background:var(--panel);border:1px solid var(--bd);border-radius:13px;padding:14px;transition:border-color .15s}
+.card:hover{border-color:#33333f}
+.card.work{border-color:#2a4a52}
+.chead{display:flex;align-items:center;gap:9px;cursor:pointer}
+.st{width:9px;height:9px;border-radius:50%;flex:none;background:var(--idle)}
+.st.work{background:var(--work);box-shadow:0 0 9px var(--work);animation:pulse 1.4s ease-in-out infinite}
+.st.idle{background:var(--idle)}.st.blocked{background:var(--amb)}.st.unknown{background:var(--dim)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.proj{font-weight:700;font-size:14px}
+.foco{font-size:10px;color:var(--work);border:1px solid #2a4a52;border-radius:5px;padding:1px 5px}
+.modelo{margin-left:auto;color:var(--mut);font-size:11px}
+.caret{color:var(--dim);margin-left:4px;transition:transform .15s}
+.card.aberto .caret{transform:rotate(90deg)}
+.titulo{color:var(--tx);font-size:12.5px;margin:9px 0 8px;min-height:18px;word-break:break-word}
+.titulo.vazio{color:var(--dim)}
+.meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--mut)}
+.badge{padding:1px 7px;border-radius:5px;border:1px solid var(--bd);font-size:10.5px}
+.badge.papel{color:var(--accent);border-color:#3a2f4a}
+.badge.direto{color:var(--dim)}
+.badge.stlabel{text-transform:uppercase;letter-spacing:.05em}
+.badge.stlabel.work{color:var(--work);border-color:#2a4a52}
+.badge.stlabel.idle{color:var(--mut)}
+.dim{color:var(--dim)}
+.corpo{display:none;margin-top:12px;border-top:1px solid var(--bd);padding-top:12px}
+.card.aberto .corpo{display:block}
+.saida{background:#0a0a0d;border:1px solid var(--bd);border-radius:8px;padding:10px;font-size:11px;color:#b9b9c6;white-space:pre-wrap;word-break:break-word;max-height:230px;overflow:auto;line-height:1.5}
+.saida.carregando{color:var(--dim)}
+.fala{display:flex;gap:7px;margin-top:9px}
+.fala input{flex:1;background:var(--panel2);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:8px 10px;font:inherit;font-size:12px}
+.fala button{background:var(--panel2);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:8px 13px;font:inherit;font-size:12px;cursor:pointer}
+.fala button:hover{border-color:var(--accent);color:var(--accent)}
+.vazio-grade{color:var(--dim);text-align:center;padding:50px;border:1px dashed var(--bd);border-radius:13px}
+/* sistema */
+.sis{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.bloco{background:var(--panel);border:1px solid var(--bd);border-radius:13px;padding:16px}
+.bloco h3{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:13px;font-weight:600}
+.linha{display:flex;justify-content:space-between;align-items:center;margin:9px 0;font-size:12.5px}
+.linha .v{color:var(--tx);font-weight:600}
+.bar{height:6px;border-radius:4px;background:#0a0a0d;overflow:hidden;margin-top:5px}
+.bar > i{display:block;height:100%;background:var(--accent)}
+.bar > i.hot{background:var(--amb)}.bar > i.max{background:var(--red)}
+iframe.fluxo{width:100%;height:calc(100vh - 130px);border:1px solid var(--bd);border-radius:13px;background:var(--panel)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--bd);border-radius:10px;padding:11px 18px;font-size:12.5px;z-index:50;opacity:0;transition:opacity .2s}
+.toast.on{opacity:1}
+.toast.err{border-color:var(--red);color:var(--red)}
 </style></head><body>
 <header>
-  <h1>COCKPIT<b>·</b>OBRA</h1>
-  <span id="ver" title="versão do cockpit no ar">v${VERSAO}</span>
-  <div class="abas" id="abas"></div>
-  <button class="aba fluxo" id="btFluxo" title="Ver o grafo do processo e o fluxo das tarefas" onclick="window.open('/fluxo','_blank')">📊 fluxo</button>
-  <button class="aba ver" id="btVer" title="Abrir o sistema deste projeto no navegador">🌐 ver sistema</button>
-  <button class="aba mais" id="btNovo" title="Adicionar ou criar um projeto">+ novo</button>
-  <button class="aba boss" id="btBoss" title="Falar com o Boss">💬 boss</button>
-  <span id="conta"></span>
-  <span id="relogio"></span>
+  <div class="marca"><span class="dot"></span>TORRE DE CONTROLE <small>v${VERSAO}</small></div>
+  <div class="tabs" id="tabs">
+    <div class="tab on" data-a="agentes">Agentes<span class="k" id="kAg"></span></div>
+    <div class="tab" data-a="fluxo">Fluxo</div>
+    <div class="tab" data-a="sistema">Sistema</div>
+  </div>
+  <div class="right">
+    <span id="custo"></span>
+    <span id="relogio"></span>
+    <a class="bossbtn" href="/chat" target="_blank">Boss ↗</a>
+  </div>
 </header>
-<div class="maquina" id="maquina"></div>
-<div class="chat" id="chat">
-  <div class="chatcab">💬 BOSS <span class="chatsub" id="chatProj">sessão dedicada · conhece o projeto</span>
-    <button id="chatJanela" title="Abrir em janela inteira (outra aba)" onclick="window.open('/chat','_blank')">⛶</button>
-    <button id="chatFechar" title="Fechar">✕</button></div>
-  <div class="chatmsgs" id="chatmsgs"></div>
-  <div class="chatanexos" id="chatAnexos"></div>
-  <div class="chatentrada">
-    <input type="file" id="chatArquivo" multiple style="display:none">
-    <button id="chatAnexar" title="Anexar arquivo">📎</button>
-    <textarea id="chatobj" maxlength="4000" placeholder="Fala com o Boss… (ele responde ou despacha pra obra)"></textarea>
-    <button id="chatEnviar">Enviar</button>
-  </div>
-</div>
-<div class="modal" id="modal">
-  <div class="cxmodal">
-    <div class="mtit">Novo projeto</div>
-    <div class="modo" id="modo">
-      <button data-m="existente" class="on">Repo que já existe</button>
-      <button data-m="novo">Criar do zero</button>
-    </div>
-    <div id="campoExistente">
-      <label>Repositório <span class="dica">(pastas git em ~/Documents/DEV)</span></label>
-      <select id="selRepo"></select>
-    </div>
-    <div id="campoNovo" style="display:none">
-      <label>Nome do projeto</label>
-      <input id="nomeNovo" maxlength="40" placeholder="ex.: Prospector">
-      <div class="dica">cria a pasta em ~/Documents/DEV, com git e um CLAUDE.md</div>
-    </div>
-    <label>Palavras-chave <span class="dica">(a trava usa pra saber que a tarefa é deste projeto — separe por vírgula)</span></label>
-    <input id="palavras" maxlength="200" placeholder="ex.: prospec, lead, cnpj, receita federal">
-    <div class="mbtns">
-      <button class="cancelar" id="cancelar">Cancelar</button>
-      <button class="ok" id="addProjeto">Adicionar</button>
-    </div>
-    <div id="modalAviso"></div>
-  </div>
-</div>
-<div class="compositor">
-  <textarea id="obj" maxlength="4000" placeholder="O que o time deve fazer? (ex.: adicionar um teste para X, corrigir o bug Y)"></textarea>
-  <div class="timesel" id="time">
-    <button data-t="auto" class="on" title="O cockpit escolhe o modelo mais barato que dá conta">Auto</button>
-    <button data-t="caprichado" title="Opus onde decide (caro, robusto)">Caprichado</button>
-    <button data-t="rapido" title="Tudo leve (barato)">Rápido</button>
-  </div>
-  <button id="rodar">Acionar time</button>
-  <span class="cap" id="cap"></span>
-  <div id="aviso"></div>
-</div>
-<div class="torre">
-  <div class="torrehd">TORRE · tarefas em paralelo <span class="torrehint">lança, vê rodando, fala com cada uma — cada tarefa é um eu no seu pane</span></div>
-  <div class="torrelanc">
-    <input id="tarefaTexto" maxlength="4000" placeholder="Nova tarefa (ex.: corrige o bug X no querofretes)… — Cmd+Enter lança">
-    <select id="tarefaProjeto" title="em qual projeto (precisa estar aberto no herdr)">
-      <option value="querofretes-ofc">querofretes-ofc</option>
-      <option value="TMS">TMS</option>
-      <option value="agb-projetos">agb-projetos</option>
-      <option value="torre">torre</option>
-      <option value="obra-cockpit">obra-cockpit</option>
-    </select>
-    <select id="tarefaModelo" title="qual modelo atende esta tarefa">
-      <option value="">modelo: auto</option>
-      <option value="sonnet">sonnet</option>
-      <option value="opus">opus</option>
-      <option value="haiku">haiku</option>
-    </select>
-    <button id="lancarTarefa">Lançar</button>
-    <span class="tarefaAviso" id="tarefaAviso"></span>
-  </div>
-  <div class="tarefas" id="tarefas"></div>
-</div>
-<div class="missoes" id="missoes"></div>
-<h2 class="secao" id="hsec" style="display:none">Missões anteriores</h2>
-<div class="historico" id="historico"></div>
-<h2 class="secao" id="gsec" style="display:none">Onde o dinheiro da obra queimou · 14 dias × hora</h2>
-<div class="mapa" id="mapa"></div>
+<main id="view"></main>
+<div class="toast" id="toast"></div>
 <script>
-const PAPEIS=${JSON.stringify(PAPEIS)};
-let PROJETOS=${JSON.stringify(listaProjetos())};   // semente do 1º paint; atualizada a cada retrato
-let time="auto", projeto=(PROJETOS[0]||{}).slug;
-const esc=s=>String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
-const est2cls={aguardando:"e-aguardando",trabalhando:"e-trabalhando",terminou:"e-terminou"};
-const dinheiro=v=>v==null?"—":"US$ "+Number(v).toFixed(2);
+var R={}, aba="agentes", abertos=new Set(), saidas={};
+var PROJS_CONHECIDOS=["querofretes-ofc","TMS","torre","agb-projetos","obra-cockpit"];
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
+function tempo(iso){if(!iso)return"";var s=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(s<0)s=0;if(s<60)return"há "+s+"s";if(s<3600)return"há "+Math.floor(s/60)+"min";if(s<86400)return"há "+Math.floor(s/3600)+"h";return"há "+Math.floor(s/86400)+"d"}
+function ktok(n){n=n||0;if(n<1000)return n+"";if(n<1e6)return (n/1000).toFixed(n<1e4?1:0)+"k";return (n/1e6).toFixed(1)+"M"}
+function toast(m,err){var t=document.getElementById("toast");t.textContent=m;t.className="toast on"+(err?" err":"");setTimeout(function(){t.className="toast"},2600)}
+function inputFocado(){var e=document.activeElement;return e&&(e.tagName==="INPUT"||e.tagName==="TEXTAREA")&&document.getElementById("view").contains(e)}
 
-// abas de projeto — REDESENHADAS quando a lista muda (projeto novo aparece sem recarregar)
-let abasAssinatura="";
-function pintarAbas(){
-  const ass=PROJETOS.map(p=>p.slug).join("|");
-  if(ass===abasAssinatura) return;   // nada mudou: não repinta (evita flicker e perder o clique)
-  abasAssinatura=ass;
-  if(!projeto||!PROJETOS.some(p=>p.slug===projeto)) projeto=(PROJETOS[0]||{}).slug;
-  document.getElementById("abas").innerHTML=PROJETOS.map(p=>
-    '<button class="aba'+(p.slug===projeto?" on":"")+'" data-p="'+esc(p.slug)+'">'+esc(p.nome)+'</button>').join("");
-  document.querySelectorAll(".abas .aba").forEach(b=>b.onclick=()=>{
-    projeto=b.dataset.p; document.querySelectorAll(".abas .aba").forEach(x=>x.classList.toggle("on",x===b));
-    // as abas seguem sendo a lista de projetos + o alvo do "Acionar time"; pro chefe-dos-chefes
-    // a aba é só a DICA de roteamento (default quando você não diz o projeto).
-    const bt=document.getElementById("chatProj"); if(bt) bt.textContent="chefe-dos-chefes · aba: "+((PROJETOS.find(p=>p.slug===projeto)||{}).nome||projeto);
-  });
-}
-pintarAbas();
-document.querySelectorAll("#time button").forEach(b=>b.onclick=()=>{
-  time=b.dataset.t; document.querySelectorAll("#time button").forEach(x=>x.classList.toggle("on",x===b));
-});
-
-// ---- modal: novo projeto ----
-let modoProjeto="existente";
-const modal=document.getElementById("modal");
-async function abrirModal(){
-  document.getElementById("modalAviso").textContent="";
-  // carrega os repos candidatos (git em ~/Documents/DEV ainda não registrados)
+// ---- conexão ao vivo (SSE, com poll de reserva) ----
+function conectar(){
   try{
-    const {candidatos}=await (await fetch("/projetos/candidatos")).json();
-    document.getElementById("selRepo").innerHTML = candidatos.length
-      ? candidatos.map(c=>'<option value="'+esc(c.dir)+'">'+esc(c.nome)+'</option>').join("")
-      : '<option value="">(nenhum repo novo em ~/Documents/DEV)</option>';
-  }catch{}
-  modal.classList.add("on");
+    var es=new EventSource("/eventos");
+    es.onmessage=function(ev){try{R=JSON.parse(ev.data);pintar()}catch(e){}};
+    es.onerror=function(){es.close();setTimeout(pollar,1500)};
+  }catch(e){pollar()}
 }
-document.getElementById("btNovo").onclick=abrirModal;
-// "ver sistema": abre no navegador o site/dev-server do projeto da aba atual.
-// Sem URL cadastrada, pergunta uma vez e guarda (o retrato confirma no próximo tick).
-document.getElementById("btVer").onclick=()=>{
-  const p=PROJETOS.find(x=>x.slug===projeto)||{};
-  let url=p.url;
-  if(!url){
-    url=prompt("URL do sistema de "+(p.nome||projeto)+" (ex.: https://querofretes.com.br ou http://localhost:5050):","https://");
-    if(!url) return;
-    url=url.trim();
-    if(url.indexOf("http://")!==0 && url.indexOf("https://")!==0){ alert("A URL tem que comecar com http:// ou https://"); return; }
-    p.url=url;
-    fetch("/projetos/url",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug:projeto,url:url})}).catch(function(){});
-  }
-  window.open(url,"_blank"); // aberto DENTRO do clique → sem bloqueio de pop-up
-};
-document.getElementById("cancelar").onclick=()=>modal.classList.remove("on");
-modal.onclick=e=>{ if(e.target===modal) modal.classList.remove("on"); };
-document.querySelectorAll("#modo button").forEach(b=>b.onclick=()=>{
-  modoProjeto=b.dataset.m;
-  document.querySelectorAll("#modo button").forEach(x=>x.classList.toggle("on",x===b));
-  document.getElementById("campoExistente").style.display = modoProjeto==="existente"?"block":"none";
-  document.getElementById("campoNovo").style.display = modoProjeto==="novo"?"block":"none";
-});
-document.getElementById("addProjeto").onclick=async()=>{
-  const av=document.getElementById("modalAviso"); av.textContent="";
-  const palavras=document.getElementById("palavras").value;
-  const corpo = modoProjeto==="novo"
-    ? {modo:"novo", nome:document.getElementById("nomeNovo").value, palavras}
-    : {modo:"existente", dir:document.getElementById("selRepo").value, palavras};
-  const r=await fetch("/projetos",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(corpo)});
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok){ av.textContent=j.erro||"não deu para adicionar"; return; }
-  // fecha e já seleciona o projeto novo — a aba aparece no próximo retrato (~1s)
-  if(j.slug) projeto=j.slug;
-  modal.classList.remove("on");
-  document.getElementById("palavras").value=""; document.getElementById("nomeNovo").value="";
-};
+function pollar(){fetch("/retrato").then(function(r){return r.json()}).then(function(j){R=j;pintar()}).catch(function(){});setTimeout(pollar,2000)}
 
-async function acionar(forcar){
-  const obj=document.getElementById("obj"), aviso=document.getElementById("aviso");
-  aviso.innerHTML="";
-  const r=await fetch("/missao",{method:"POST",headers:{"content-type":"application/json"},
-    body:JSON.stringify({objetivo:obj.value,projeto,time,forcar:!!forcar})});
-  const j=await r.json().catch(()=>({}));
-  if(r.status===409&&j.conflito){
-    // A TRAVA agiu: o texto parece de outro projeto. Pergunta em vez de decidir.
-    const objTexto=obj.value;
-    aviso.innerHTML='<div class="conflito">⚠️ <b>Isto parece de '+esc(j.conflito.sugeridoNome)+'</b>, não de '+
-      esc(PROJETOS.find(p=>p.slug===projeto)?.nome||projeto)+'. '+esc(j.conflito.motivo)+'.'+
-      '<div class="btns"><button class="nao" id="trocar">Trocar para '+esc(j.conflito.sugeridoNome)+'</button>'+
-      '<button class="sim" id="forcar">Rodar em '+esc(PROJETOS.find(p=>p.slug===projeto)?.nome||projeto)+' mesmo assim</button></div></div>';
-    document.getElementById("trocar").onclick=()=>{
-      projeto=j.conflito.sugerido;
-      document.querySelectorAll(".aba").forEach(x=>x.classList.toggle("on",x.dataset.p===projeto));
-      aviso.innerHTML=""; acionar(false);
-    };
-    document.getElementById("forcar").onclick=()=>{ obj.value=objTexto; acionar(true); };
-    return;
-  }
-  if(!r.ok){aviso.textContent=j.erro||"não deu para acionar";return}
-  obj.value="";
+function pintar(){
+  var ag=R.agentes||[];
+  document.getElementById("kAg").textContent=ag.length?ag.length:"";
+  var trab=ag.filter(function(a){return a.status==="working"}).length;
+  document.getElementById("relogio").innerHTML="<b>"+trab+"</b> trabalhando · "+ag.length+" no ar";
+  var g=R.gasto&&R.gasto.total!=null?("US$ "+Number(R.gasto.total).toFixed(2)):"";
+  document.getElementById("custo").innerHTML=g?("obra "+g):"";
+  if(inputFocado())return; // não repinta enquanto você digita
+  renderAba();
 }
-document.getElementById("rodar").onclick=()=>acionar(false);
-document.getElementById("lancarTarefa").onclick=lancarTarefa;
-document.getElementById("tarefaTexto").addEventListener("keydown",function(e){ if((e.metaKey||e.ctrlKey)&&e.key==="Enter") lancarTarefa(); });
-
-function role(p){
-  const reprovou=p.step==="terminou"&&p.chave==="revisor"&&/REPROVADO/i.test(p.resultado||"");
-  const cls=reprovou?"e-reprovou":(est2cls[p.step]||"e-aguardando");
-  const ativo=p.step==="trabalhando";
-  const rotulo=reprovou?"reprovou":p.step;
-  let corpo;
-  if(p.step==="aguardando") corpo='<div class="ativ" style="color:#6c6c78">○ aguardando</div>';
-  else if(p.resultado) corpo='<div class="res">'+esc(p.resultado)+'</div>';
-  else { const l=p.atividade[p.atividade.length-1]||"iniciando…"; corpo='<div class="ativ'+(l.startsWith("▸")?" tool":"")+'">'+esc(l)+'</div>'; }
-  return '<div class="role'+(ativo?" ativo":"")+'">'+
-    '<div class="rt"><span class="emo">'+p.emoji+'</span><span class="nm">'+p.nome+'</span>'+
-      '<span class="est '+cls+'">'+(ativo?'<span class="pisca">▶</span> ':"")+rotulo+'</span></div>'+
-    corpo+
-    '<div class="rp">'+(p.modelo?'<span>'+esc(p.modelo)+'</span>':'')+
-      '<span class="cu">'+dinheiro(p.custo)+'</span></div></div>';
+function renderAba(){
+  var v=document.getElementById("view");
+  if(aba==="agentes")v.innerHTML=htmlAgentes();
+  else if(aba==="fluxo")v.innerHTML='<iframe class="fluxo" src="/fluxo"></iframe>';
+  else v.innerHTML=htmlSistema();
+}
+function setAba(a){aba=a;abertos.clear();
+  var ts=document.querySelectorAll("#tabs .tab");for(var i=0;i<ts.length;i++)ts[i].className="tab"+(ts[i].dataset.a===a?" on":"");
+  renderAba();
 }
 
-const chipTier=t=>t?'<span class="tier tier-'+esc(t)+'" title="nível escolhido pelo roteador de custo">'+esc(t)+'</span>':'';
-// mini-grafo do pipeline: 4 nós Eng→QA→Rev→PR — verde=feito, ciano pulsando=rodando,
-// vermelho=reprovado, cinza=ainda não começou; seta de retorno Rev→Eng quando reprova.
-function miniGrafo(m){
-  const st={};
-  (m.paineis||[]).forEach(function(p){
-    const rep=p.chave==="revisor"&&p.step==="terminou"&&/REPROVADO/i.test(p.resultado||"");
-    st[p.chave]=rep?"rep":(p.step==="terminou"?"ok":(p.step==="trabalhando"?"run":"wait"));
-  });
-  const cor={ok:"var(--verde)",run:"var(--ciano)",rep:"var(--verm)",wait:"#24384d"};
-  const nos=[["eng","Eng"],["qa","QA"],["revisor","Rev"],["pr","PR"]];
-  const X=[26,96,166,236], Y=22, R=9;
-  let s='<svg class="mgraf" viewBox="0 0 262 46" preserveAspectRatio="xMidYMid meet" aria-hidden="true">';
-  for(let i=0;i<3;i++) s+='<line x1="'+(X[i]+R)+'" y1="'+Y+'" x2="'+(X[i+1]-R)+'" y2="'+Y+'" stroke="var(--linha)" stroke-width="2"/>';
-  const reprovou=st.revisor==="rep";
-  if(reprovou){
-    s+='<path d="M'+X[2]+' '+(Y-R)+' C '+X[2]+' 3,'+X[0]+' 3,'+X[0]+' '+(Y-R)+'" fill="none" stroke="var(--verm)" stroke-width="1.4" stroke-dasharray="3 2"/>';
-    s+='<path d="M'+(X[0]-3)+' '+(Y-R-4)+' L'+X[0]+' '+(Y-R+1)+' L'+(X[0]+3)+' '+(Y-R-4)+'" fill="var(--verm)"/>';
-  }
-  nos.forEach(function(n,i){
-    const e=st[n[0]]||"wait";
-    s+='<rect x="'+(X[i]-R)+'" y="'+(Y-R)+'" width="'+(2*R)+'" height="'+(2*R)+'" fill="'+cor[e]+'"'+(e==="run"?' class="mg-puls"':'')+'/>';
-    s+='<text x="'+X[i]+'" y="'+(Y+R+11)+'" text-anchor="middle" class="mg-lb">'+n[1]+'</text>';
-  });
-  s+='</svg>';
-  return '<div class="mgwrap">'+s+(reprovou?'<span class="mground">↻ 2ª rodada</span>':'')+'</div>';
+// ---- ABA AGENTES ----
+function opcoesProj(){
+  var set={};(R.agentes||[]).forEach(function(a){if(a.projeto&&a.projeto!=="?")set[a.projeto]=1});
+  PROJS_CONHECIDOS.forEach(function(p){set[p]=1});
+  return Object.keys(set).map(function(p){return '<option value="'+esc(p)+'">'+esc(p)+'</option>'}).join("");
 }
-function missaoCard(m){
-  return '<div class="mcard'+(m.rodando?" rodando":"")+'">'+
-    '<div class="mhead"><span class="proj">'+esc(m.projeto)+'</span>'+chipTier(m.tier)+
-      '<span class="obj">'+esc(m.objetivo)+'</span>'+
-      '<span class="badge '+(m.rodando?"b-on":"b-off")+'">'+(m.rodando?"rodando":"encerrada")+'</span>'+
-      '<span class="custo">'+dinheiro(m.custoTotal)+'</span></div>'+
-    miniGrafo(m)+
-    '<div class="roles">'+m.paineis.map(role).join("")+'</div></div>';
+function htmlAgentes(){
+  var ag=R.agentes||[];
+  var lanc='<div class="lanc">'+
+    '<input class="obj" id="obj" placeholder="Nova tarefa: descreva o que fazer…" onkeydown="if(event.key===\\'Enter\\')despachar()">'+
+    '<select id="proj"><option value="">projeto…</option>'+opcoesProj()+'</select>'+
+    '<select id="mod"><option value="">modelo (padrão)</option><option value="opus">Opus</option><option value="sonnet">Sonnet</option><option value="haiku">Haiku</option></select>'+
+    '<button id="btnDesp" onclick="despachar()">Despachar</button>'+
+    '<div class="hint">Despachar abre um agente novo num worktree isolado. Os agentes que você abre na mão no herdr aparecem aqui sozinhos.</div>'+
+  '</div>';
+  if(!ag.length)return lanc+'<div class="vazio-grade">Nenhum agente vivo no herdr agora.<br>Despache uma tarefa acima, ou abra um <b>claude</b> num pane que ele aparece aqui.</div>';
+  return lanc+'<div class="grade">'+ag.map(cardAgente).join("")+'</div>';
 }
-
-// Card do "Boss (direto)": trabalho que o EU faz na mão, não via crew — pra também aparecer no painel
-function diretoCard(d){
-  const fim=d.status==="terminou";
-  return '<div class="mcard direto'+(fim?"":" rodando")+'">'+
-    '<div class="mhead"><span class="proj bossdir">BOSS · DIRETO</span>'+
-      (d.projeto?'<span class="proj">'+esc(d.projeto)+'</span>':'')+
-      '<span class="obj">'+esc(d.titulo)+'</span>'+
-      '<span class="badge '+(fim?"b-off":"b-on")+'">'+(fim?"feito":"trabalhando")+'</span>'+
-      '<span class="custo">'+quando(d.comecou)+'</span></div>'+
-    ((d.resultado||d.atividade)?'<div class="datv">'+esc(d.resultado||d.atividade)+'</div>':'')+
+function iconePapel(p){return p==="engenheiro"?"🔧":p==="qa"?"🧪":p==="revisor"?"🔍":p==="pr"?"🚀":"•"}
+function cardAgente(a){
+  var st=a.status||"unknown";
+  var aberto=abertos.has(a.pane);
+  var sub=st==="working"?"trabalhando":st==="idle"?"parado":st==="blocked"?"travado":st;
+  var papel=a.despachado?('<span class="badge papel">'+iconePapel(a.papel)+" "+esc(a.papel||"obra")+'</span>'):'<span class="badge direto">direto</span>';
+  var corpo="";
+  if(aberto){
+    var s=saidas[a.pane];
+    corpo='<div class="corpo">'+
+      '<div class="saida'+(s==null?" carregando":"")+'" id="sd-'+esc(a.pane)+'">'+(s==null?"lendo o terminal…":esc(s))+'</div>'+
+      '<div class="fala"><input id="fl-'+esc(a.pane)+'" placeholder="dizer algo pra este agente…" onkeydown="if(event.key===\\'Enter\\')falar(\\''+esc(a.pane)+'\\')">'+
+      '<button onclick="falar(\\''+esc(a.pane)+'\\')">enviar</button></div>'+
     '</div>';
-}
-
-// ---- Torre de tarefas (peça 2): lançar em paralelo, ver cards ao vivo, falar com cada uma ----
-async function lancarTarefa(){
-  var texto=document.getElementById("tarefaTexto").value.trim();
-  var projeto=document.getElementById("tarefaProjeto").value;
-  var modelo=document.getElementById("tarefaModelo").value;
-  var av=document.getElementById("tarefaAviso");
-  if(!texto){ av.textContent="escreva a tarefa"; return; }
-  av.textContent="lançando…";
-  try{
-    var r=await fetch("/tarefa",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({texto:texto,projeto:projeto,modelo:modelo})});
-    var j=await r.json();
-    if(!r.ok){ av.textContent=j.erro||"falhou"; av.title=j.detalhe||""; return; }
-    document.getElementById("tarefaTexto").value=""; av.textContent="lançada ✓ ("+j.nome+")"; av.title=""; setTimeout(function(){av.textContent="";},4000);
-  }catch(e){ av.textContent="erro ao lançar"; }
-}
-async function falarTarefa(nome){
-  var card=document.querySelector('.tcard[data-nome="'+nome+'"]');
-  if(!card) return; var inp=card.querySelector(".tfalar input");
-  var texto=inp.value.trim(); if(!texto) return;
-  inp.disabled=true;
-  try{ await fetch("/tarefa/falar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:nome,texto:texto})}); inp.value=""; }catch(e){}
-  inp.disabled=false; inp.focus();
-  // mostra a resposta da tarefa (ela responde no pane; puxamos algumas vezes pra pegar a réplica)
-  atualizarSaida(nome);
-  setTimeout(function(){atualizarSaida(nome);},2200);
-  setTimeout(function(){atualizarSaida(nome);},5000);
-}
-async function fecharTarefa(nome){
-  if(!confirm("Encerrar a tarefa "+nome+"? (remove a cópia do repositório)")) return;
-  try{ await fetch("/tarefa/fechar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome:nome})}); }catch(e){}
-}
-function tarefaStatus(s){
-  s=String(s||"").toLowerCase();
-  if(s==="subindo") return {t:"subindo…",c:"b-on"};
-  if(s==="erro") return {t:"erro",c:"b-err"};
-  if(s==="running"||s==="busy"||s==="working"||s==="thinking") return {t:"trabalhando",c:"b-on"};
-  if(s==="done"||s==="finished") return {t:"pronto",c:"b-off"};
-  if(s==="idle"||s==="waiting"||s==="ready") return {t:"aguardando",c:"b-off"};
-  if(!s||s==="unknown") return {t:"—",c:"b-off"};
-  return {t:s,c:"b-off"};
-}
-async function atualizarSaida(nome){
-  var el=document.getElementById("saida-"+nome); if(!el) return;
-  el.textContent="carregando…";
-  try{ var r=await fetch("/tarefa/saida?nome="+encodeURIComponent(nome)); var j=await r.json(); el.textContent=(j.texto||"").trim()||"(sem saída ainda)"; el.scrollTop=el.scrollHeight; }
-  catch(e){ el.textContent="(erro ao ler a saída)"; }
-}
-function tarefaCard(t){
-  var st=tarefaStatus(t.status);
-  var aberto=expandidos.has(t.nome);
-  var body;
-  if(t.status==="erro"){ body='<pre class="tsaida terro">'+esc(t.erro||"não consegui lançar")+'</pre>'; }
-  else if(t.status==="subindo"){ body='<div class="tsubindo">subindo… abrindo a cópia + carregando memória/skills (~1min)</div>'; }
-  else {
-    body='<pre class="tsaida" id="saida-'+esc(t.nome)+'">(fale ou clique ↻ pra ver a resposta da tarefa)</pre>'+
-      '<div class="tfalar">'+
-        '<input maxlength="4000" placeholder="fala com esta tarefa… (Enter envia)" onkeydown="if(event.key===&quot;Enter&quot;)falarTarefa(&quot;'+esc(t.nome)+'&quot;)">'+
-        '<button onclick="falarTarefa(&quot;'+esc(t.nome)+'&quot;)">enviar</button>'+
-        '<button class="tref" onclick="atualizarSaida(&quot;'+esc(t.nome)+'&quot;)" title="atualizar a saída da tarefa">↻</button>'+
-        '<span class="tpane" title="abra este pane no herdr pra conversar direto">herdr: '+esc(t.pane||"?")+'</span>'+
-      '</div>';
   }
-  // uma LINHA por tarefa (clica pra expandir e falar/ver saída) — torre limpa
-  return '<div class="mcard tcard'+(t.status==="erro"?" tcarderr":"")+(aberto?" aberto":"")+'" data-nome="'+esc(t.nome)+'">'+
-    '<div class="mhead thead" onclick="toggleTarefa(&quot;'+esc(t.nome)+'&quot;)">'+
-      '<span class="tcaret">'+(aberto?"▾":"▸")+'</span>'+
-      '<span class="proj torretag">'+esc(t.projeto||"tarefa")+'</span>'+
-      (t.modelo?'<span class="proj modelo">'+esc(t.modelo)+'</span>':'')+
-      '<span class="obj">'+esc(t.tarefa)+'</span>'+
-      '<span class="badge '+st.c+'">'+esc(st.t)+'</span>'+
-      '<span class="custo">'+quando(t.aberto_em)+'</span>'+
-      '<button class="tfechar" onclick="event.stopPropagation();fecharTarefa(&quot;'+esc(t.nome)+'&quot;)" title="encerrar/descartar">✕</button>'+
+  return '<div class="card '+(st==="working"?"work":"")+(aberto?" aberto":"")+'">'+
+    '<div class="chead" onclick="toggle(\\''+esc(a.pane)+'\\')">'+
+      '<span class="st '+st+'"></span>'+
+      '<span class="proj">'+esc(a.projeto)+'</span>'+
+      (a.focado?'<span class="foco">em foco</span>':"")+
+      '<span class="modelo">'+esc((a.modelo||"").replace("claude-","").replace(/-\\d+$/,""))+'</span>'+
+      '<span class="caret">▸</span>'+
     '</div>'+
-    '<div class="tbody">'+body+'</div></div>';
+    '<div class="titulo'+(a.titulo?"":" vazio")+'">'+(a.titulo?esc(a.titulo):"— sem título —")+'</div>'+
+    '<div class="meta">'+
+      '<span class="badge stlabel '+(st==="working"?"work":"idle")+'">'+esc(sub)+'</span>'+
+      papel+
+      '<span class="dim">'+esc(a.casa||"claude")+'</span>'+
+      '<span class="dim">'+ktok(a.out)+' tok</span>'+
+      '<span class="dim">'+esc(a.pane)+'</span>'+
+      (a.ultima?'<span class="dim" style="margin-left:auto">'+tempo(a.ultima)+'</span>':"")+
+    '</div>'+corpo+
+  '</div>';
 }
-function toggleTarefa(nome){
-  var card=document.querySelector('.tcard[data-nome="'+nome+'"]'); if(!card) return;
-  if(expandidos.has(nome)){ expandidos.delete(nome); card.classList.remove("aberto"); }
-  else { expandidos.add(nome); card.classList.add("aberto"); atualizarSaida(nome); }
-  var c=card.querySelector(".tcaret"); if(c) c.textContent=expandidos.has(nome)?"▾":"▸";
+function toggle(pane){
+  if(abertos.has(pane)){abertos.delete(pane)}else{abertos.add(pane);verSaida(pane)}
+  renderAba();
 }
-var _tarefasSig="";
-var expandidos=new Set(); // quais cards estão abertos (persiste entre repaints)
-function pintarTarefas(tarefas){
-  var el=document.getElementById("tarefas"); if(!el) return;
-  // ⚠️ o retrato chega ~1×/s; se der innerHTML enquanto o dono digita num card, o input
-  // some (perde foco + texto). Então: NÃO repinta se o foco está dentro da torre...
-  var foco=document.activeElement;
-  if(foco && el.contains(foco)) return;
-  // ...e só repinta quando a LISTA muda de verdade (evita churn e piscar do DOM).
-  var sig=JSON.stringify((tarefas||[]).map(function(t){return [t.nome,t.projeto,t.modelo,t.tarefa,t.pane,t.status,t.erro]}));
-  if(sig===_tarefasSig) return;
-  _tarefasSig=sig;
-  el.innerHTML=(tarefas&&tarefas.length)?tarefas.map(tarefaCard).join(""):'';
+function verSaida(pane){
+  fetch("/agente/saida?pane="+encodeURIComponent(pane)).then(function(r){return r.json()}).then(function(j){
+    saidas[pane]=j.texto!=null?j.texto:(j.erro||"(sem saída)");
+    if(abertos.has(pane))renderAba();
+  }).catch(function(){saidas[pane]="(não consegui ler)";if(abertos.has(pane))renderAba()});
 }
-
-function quando(iso){ if(!iso) return ""; const m=Math.floor((Date.now()-new Date(iso))/60000);
-  return m<1?"agora":m<60?"há "+m+"min":m<1440?"há "+Math.floor(m/60)+"h":"há "+Math.floor(m/1440)+"d"; }
-
-// histórico RICO: cada linha abre e mostra PR, nível, motivo do veredito e custo POR PAPEL
-function detalheMissao(h){
-  let out="";
-  if(h.tier) out+='<div class="lin">nível <b style="color:var(--gelo)">'+esc(h.tier)+'</b>'+(h.tierMotivo?' — '+esc(h.tierMotivo):'')+'</div>';
-  if(h.prUrl) out+='<div class="lin">PR: <a href="'+esc(h.prUrl)+'" target="_blank" rel="noreferrer">'+esc(h.prUrl)+'</a>'+
-    ' <button class="verdiff" onclick="verDiff(this)" data-pr="'+esc(h.prUrl)+'">ver o que mudou</button></div>'+
-    '<div class="diffbox"></div>';
-  if(h.vereditoMotivo) out+='<div class="lin">revisor: '+esc(h.vereditoMotivo)+'</div>';
-  (h.papeis||[]).forEach(function(p){
-    out+='<div class="papel"><span class="pn">'+(p.emoji||"")+' '+esc(p.nome)+'</span>'+
-      '<span class="pm">'+esc(p.modelo||"—")+'</span>'+
-      '<span class="pr">'+esc(p.resultado||"")+'</span>'+
-      '<span class="pc">'+dinheiro(p.custo)+'</span></div>';
-  });
-  return out||'<div class="lin">sem detalhes guardados (missão antiga)</div>';
+function falar(pane){
+  var el=document.getElementById("fl-"+pane);if(!el)return;var texto=el.value.trim();if(!texto)return;
+  el.value="";el.disabled=true;
+  fetch("/agente/falar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pane:pane,texto:texto})})
+    .then(function(r){return r.json()}).then(function(j){
+      el.disabled=false;
+      if(j.ok){toast("enviado pra "+pane);setTimeout(function(){verSaida(pane)},1600)}
+      else toast(j.erro||"não enviou",true);
+    }).catch(function(){el.disabled=false;toast("falha ao enviar",true)});
 }
-// "ver o que mudou": busca o diff do PR e mostra colorido, aqui no navegador (toggle)
-async function verDiff(btn){
-  const box=btn.closest(".hdet").querySelector(".diffbox");
-  if(box.getAttribute("data-aberto")){ box.innerHTML=""; box.removeAttribute("data-aberto"); btn.textContent="ver o que mudou"; return; }
-  btn.textContent="buscando…"; btn.disabled=true;
-  try{
-    const j=await (await fetch("/missao/diff?pr="+encodeURIComponent(btn.dataset.pr))).json();
-    box.innerHTML = j.diff ? pintarDiff(j.diff) : '<div class="dl dim" style="padding:8px 10px">'+esc(j.erro||"sem diff")+'</div>';
-    box.setAttribute("data-aberto","1"); btn.textContent="esconder";
-  }catch{ box.innerHTML='<div class="dl dim" style="padding:8px 10px">erro ao buscar o diff</div>'; }
-  btn.disabled=false;
-}
-function pintarDiff(txt){
-  return txt.split(/\\r?\\n/).map(function(l){
-    var c="dim";
-    if(l.startsWith("diff --git")||l.startsWith("+++")||l.startsWith("---")) c="ff";
-    else if(l.startsWith("@@")) c="hh";
-    else if(l[0]==="+") c="add";
-    else if(l[0]==="-") c="del";
-    return '<div class="dl '+c+'">'+esc(l||" ")+'</div>';
-  }).join("");
-}
-let histAssinatura="";
-function pintarHistorico(hist){
-  const ass=hist.map(h=>(h.objetivo||"")+(h.fim||"")+(h.custo||"")).join("|");
-  if(ass===histAssinatura) return;   // nada mudou: não repinta (mantém aberto o que você expandiu)
-  histAssinatura=ass;
-  document.getElementById("historico").innerHTML=hist.map(function(h){
-    return '<details class="hitem"><summary><div class="hrow">'+
-      '<span class="hv hv-'+esc(h.veredito)+'">'+esc(h.veredito)+'</span>'+chipTier(h.tier)+
-      '<span class="ho">'+esc(h.objetivo)+'</span>'+
-      '<span class="hp">'+esc(h.projeto)+'</span>'+
-      '<span class="hp">'+quando(h.fim)+'</span>'+
-      '<span class="hc">'+dinheiro(h.custo)+'</span></div></summary>'+
-      '<div class="hdet">'+detalheMissao(h)+'</div></details>';
-  }).join("");
+function despachar(){
+  var obj=document.getElementById("obj"),proj=document.getElementById("proj"),mod=document.getElementById("mod"),btn=document.getElementById("btnDesp");
+  var texto=obj.value.trim();if(!texto)return toast("descreva a tarefa",true);
+  if(!proj.value)return toast("escolha o projeto",true);
+  btn.disabled=true;btn.textContent="despachando…";
+  fetch("/tarefa",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({texto:texto,projeto:proj.value,modelo:mod.value||null})})
+    .then(function(r){return r.json()}).then(function(j){
+      btn.disabled=false;btn.textContent="Despachar";
+      if(j.erro){toast(j.erro,true)}else{obj.value="";toast("despachado: "+(j.nome||"tarefa"))}
+    }).catch(function(){btn.disabled=false;btn.textContent="Despachar";toast("falha ao despachar",true)});
 }
 
-// assinatura (plano) + o que a obra já gastou — não existe "saldo de créditos" pra mostrar no
-// plano por assinatura (é limite de uso, não consumo por crédito); o que É medível é o gasto.
-function pintarConta(c,g){
-  const box=document.getElementById("conta");
-  if(!c||!c.plano){ box.innerHTML=""; return; }
-  const hoje=(g&&g.linhas&&g.linhas.length)?g.linhas[g.linhas.length-1].total:0;
-  box.title=c.email||"";
-  box.innerHTML=
-    '<span class="plano">'+esc(c.plano.toUpperCase())+'</span>'+
-    '<span>obra hoje <b style="color:var(--verde)">'+dinheiro(hoje)+'</b></span>'+
-    '<span>14d <b style="color:var(--verde)">'+dinheiro(g&&g.total)+'</b></span>';
-}
-// painel de hardware do saturno (GPU/CPU/RAM) — barras finas, roxo/verde
-function pintarMaquina(m){
-  const el=document.getElementById("maquina"); if(!el) return;
-  if(!m || (!m.cpu && !m.mem && !m.gpu)){ el.style.display="none"; return; } // sem /proc/nvidia (ex.: Mac) → esconde
-  el.style.display="flex";
-  const bar=(pct,cor)=>'<span class="mqbar"><span style="width:'+Math.max(2,Math.min(100,pct||0))+'%;background:'+cor+'"></span></span>';
-  let g;
-  if(m.gpu){
-    const av=m.gpu.aviso?' <b class="mqw">'+esc(m.gpu.aviso)+'</b>':'';
-    const vpct=m.gpu.memTotal?Math.round(m.gpu.memUsed/m.gpu.memTotal*100):0;
-    g='<div class="mqcell"><span class="mql">GPU · '+esc(m.gpu.nome)+av+'</span>'+
-      '<span class="mqv">'+(m.gpu.util!=null?m.gpu.util+"% uso":"—")+(m.gpu.temp!=null?" · "+m.gpu.temp+"°C":"")+' · VRAM '+(m.gpu.memUsed||0)+"/"+(m.gpu.memTotal||0)+'MB</span>'+bar(vpct,"var(--ciano)")+'</div>';
-  } else g='<div class="mqcell"><span class="mql">GPU</span><span class="mqv">sem leitura</span></div>';
-  const cpu=m.cpu?'<div class="mqcell"><span class="mql">CPU · '+m.cpu.cores+' cores</span><span class="mqv">carga '+m.cpu.load1.toFixed(2)+" · "+m.cpu.pct+'%</span>'+bar(m.cpu.pct,"var(--verde)")+'</div>':'';
-  const mem=m.mem?'<div class="mqcell"><span class="mql">RAM</span><span class="mqv">'+m.mem.usedGB+" / "+m.mem.totalGB+" GB · "+m.mem.pct+'%</span>'+bar(m.mem.pct,"var(--verde)")+'</div>':'';
-  el.innerHTML='<span class="mqhost">🖥️ saturno</span>'+g+cpu+mem;
-}
-function render(d){
-  if(d.projetos){ PROJETOS=d.projetos; pintarAbas(); }   // projeto novo aparece na aba sem recarregar
-  document.getElementById("relogio").textContent=new Date(d.em).toLocaleTimeString("pt-BR");
-  pintarConta(d.conta, d.gasto);
-  pintarMaquina(d.maquina);
-  pintarTarefas(d.tarefas);
-  const cheio=d.ativas>=d.max;
-  document.getElementById("rodar").disabled=cheio;
-  document.getElementById("cap").textContent=d.ativas?(d.ativas+"/"+d.max+" rodando"):"";
-  const cards=[];
-  if(d.diretos&&d.diretos.length) cards.push(d.diretos.map(diretoCard).join(""));
-  if(d.missoes&&d.missoes.length) cards.push(d.missoes.map(missaoCard).join(""));
-  document.getElementById("missoes").innerHTML = cards.length
-    ? cards.join("")
-    : '<div class="vazio"><b>Nenhuma missão ainda</b>escreva o objetivo acima e acione o time — pode mandar várias</div>';
-  const hist=d.historico||[];
-  document.getElementById("hsec").style.display=hist.length?"block":"none";
-  pintarHistorico(hist);
-  mapaGasto(d.gasto);
+// ---- ABA SISTEMA ----
+function barra(pct,cls){pct=Math.max(0,Math.min(100,pct||0));var c=pct>=90?"max":pct>=70?"hot":"";return '<div class="bar"><i class="'+c+'" style="width:'+pct+'%"></i></div>'}
+function htmlSistema(){
+  var m=R.maquina||{},ag=R.agentes||[],g=R.gasto||{};
+  var trab=ag.filter(function(a){return a.status==="working"}).length;
+  var cpu=m.cpu?'<div class="linha"><span>CPU</span><span class="v">'+m.cpu.pct+'% · load '+m.cpu.load1.toFixed(2)+'/'+m.cpu.cores+'</span></div>'+barra(m.cpu.pct):"";
+  var mem=m.mem?'<div class="linha"><span>RAM</span><span class="v">'+m.mem.usedGB+' / '+m.mem.totalGB+' GB</span></div>'+barra(m.mem.pct):"";
+  var gpu=m.gpu?'<div class="linha"><span>GPU '+esc(m.gpu.nome)+'</span><span class="v">'+(m.gpu.util!=null?m.gpu.util+'%':"—")+(m.gpu.temp!=null?" · "+m.gpu.temp+"°":"")+'</span></div>'+(m.gpu.util!=null?barra(m.gpu.util):"")+(m.gpu.aviso?'<div class="linha"><span class="dim">'+esc(m.gpu.aviso)+'</span></div>':""):'<div class="linha"><span class="dim">GPU — sem leitura</span></div>';
+  var maquina='<div class="bloco"><h3>Máquina (saturno)</h3>'+cpu+mem+gpu+'</div>';
+  var frota='<div class="bloco"><h3>Frota de agentes</h3>'+
+    '<div class="linha"><span>No ar</span><span class="v">'+ag.length+'</span></div>'+
+    '<div class="linha"><span>Trabalhando</span><span class="v">'+trab+'</span></div>'+
+    '<div class="linha"><span>Parados</span><span class="v">'+(ag.length-trab)+'</span></div>'+
+    '<div class="linha"><span>Despachados pela obra</span><span class="v">'+ag.filter(function(a){return a.despachado}).length+'</span></div>'+
+  '</div>';
+  var custo='<div class="bloco"><h3>Gasto da obra (14d)</h3>'+
+    '<div class="linha"><span>Total</span><span class="v">'+(g.total!=null?"US$ "+Number(g.total).toFixed(2):"—")+'</span></div>'+
+    (R.conta&&R.conta.email?'<div class="linha"><span>Conta</span><span class="v">'+esc(R.conta.email)+'</span></div>':"")+
+    '<div class="linha"><span>herdr</span><span class="v">'+(ag.length?"no ar":"sem agentes")+'</span></div>'+
+  '</div>';
+  return '<div class="sis">'+maquina+frota+custo+'</div>';
 }
 
-// ---- chat do Boss ----
-const chat=document.getElementById("chat");
-function chipsAnexos(anexos){
-  if(!anexos||!anexos.length) return "";
-  return '<div class="anexos">'+anexos.map(a=>'<span class="anexo">📎 '+esc(a.nome)+'</span>').join("")+'</div>';
-}
-function pintarChat(msgs){
-  const box=document.getElementById("chatmsgs");
-  if(!msgs||!msgs.length){ box.innerHTML='<div class="chatvazio">Fala com o Boss. Ele responde na hora, e quando for código ele despacha pra obra sozinho.</div>'; return; }
-  box.innerHTML=msgs.map(m=>'<div class="msg '+(m.de==="voce"?"voce":"boss")+'">'+(m.texto?esc(m.texto):"")+chipsAnexos(m.anexos)+'</div>').join("");
-  box.scrollTop=box.scrollHeight;
-}
-async function abrirChat(){
-  chat.classList.add("on");
-  // UM chefe-dos-chefes: conhece todos os projetos; a aba atual é só a dica de roteamento
-  const nome=(PROJETOS.find(p=>p.slug===projeto)||{}).nome||projeto||"";
-  document.getElementById("chatProj").textContent="chefe-dos-chefes · aba: "+nome;
-  try{ pintarChat((await (await fetch("/boss/historico")).json()).mensagens); }catch{}
-  document.getElementById("chatobj").focus();
-}
-document.getElementById("btBoss").onclick=abrirChat;
-document.getElementById("chatFechar").onclick=()=>chat.classList.remove("on");
-
-// ---- anexos do chat: escolhe → sobe pro servidor na hora → some da lista quando a mensagem sai ----
-let anexosPendentes=[];
-function pintarAnexosPendentes(){
-  const box=document.getElementById("chatAnexos");
-  if(!anexosPendentes.length){ box.style.display="none"; box.innerHTML=""; return; }
-  box.style.display="flex";
-  box.innerHTML=anexosPendentes.map((a,i)=>'<span class="anexo">📎 '+esc(a.nome)+' <b data-i="'+i+'" title="remover">✕</b></span>').join("");
-  box.querySelectorAll("b").forEach(b=>b.onclick=()=>{ anexosPendentes.splice(+b.dataset.i,1); pintarAnexosPendentes(); });
-}
-function lerComoBase64(arquivo){
-  return new Promise((ok,erro)=>{
-    const r=new FileReader();
-    r.onload=()=>ok(String(r.result).split(",").pop());
-    r.onerror=erro;
-    r.readAsDataURL(arquivo);
-  });
-}
-let contadorColado=0;
-// sobe UM arquivo (do 📎 ou do colar) pro servidor e guarda como anexo pendente
-async function subirArquivo(f){
-  const nome=f.name||("colado-"+(++contadorColado)+"."+((f.type.split("/")[1])||"png"));
-  if(f.size>4*1024*1024){ alert('"'+nome+'" passa de 4MB — não anexado'); return; }
-  try{
-    const dados=await lerComoBase64(f);
-    const r=await fetch("/boss/anexo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({nome,dados})});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok){ alert(j.erro||('não deu para anexar "'+nome+'"')); return; }
-    anexosPendentes.push({nome:j.nome,caminho:j.caminho});
-  }catch{ alert('erro ao anexar "'+nome+'"'); }
-}
-document.getElementById("chatAnexar").onclick=()=>document.getElementById("chatArquivo").click();
-document.getElementById("chatArquivo").addEventListener("change",async e=>{
-  const arquivos=[...e.target.files]; e.target.value="";
-  for(const f of arquivos) await subirArquivo(f);
-  pintarAnexosPendentes();
-});
-// COLAR imagem (Cmd+V) direto no chat → vira anexo (o print que você vive colando)
-document.getElementById("chatobj").addEventListener("paste",async e=>{
-  const imgs=[...(e.clipboardData&&e.clipboardData.items||[])].filter(it=>it.kind==="file"&&it.type.indexOf("image/")===0);
-  if(!imgs.length) return; // colou texto normal: deixa seguir
-  e.preventDefault();
-  for(const it of imgs){ const f=it.getAsFile(); if(f) await subirArquivo(f); }
-  pintarAnexosPendentes();
-});
-
-async function enviarBoss(){
-  const inp=document.getElementById("chatobj"), bt=document.getElementById("chatEnviar");
-  const msg=inp.value.trim();
-  if(!msg&&!anexosPendentes.length) return;
-  const anexos=anexosPendentes;
-  const box=document.getElementById("chatmsgs");
-  // pinta a sua msg + "pensando" na hora (a resposta demora alguns segundos)
-  box.insertAdjacentHTML("beforeend",'<div class="msg voce">'+(msg?esc(msg):"")+chipsAnexos(anexos)+'</div><div class="msg pensando" id="pensando">Boss pensando…</div>');
-  box.scrollTop=box.scrollHeight; inp.value=""; anexosPendentes=[]; pintarAnexosPendentes(); bt.disabled=true;
-  try{
-    const r=await fetch("/boss/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mensagem:msg,anexos,projeto})});
-    const j=await r.json().catch(()=>({}));
-    document.getElementById("pensando")?.remove();
-    box.insertAdjacentHTML("beforeend",'<div class="msg boss">'+esc(j.resposta||j.erro||"(sem resposta)")+'</div>');
-    box.scrollTop=box.scrollHeight;
-  }catch{ document.getElementById("pensando")?.remove(); box.insertAdjacentHTML("beforeend",'<div class="msg boss">(erro ao falar com o Boss)</div>'); }
-  bt.disabled=false; inp.focus();
-}
-document.getElementById("chatEnviar").onclick=enviarBoss;
-document.getElementById("chatobj").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); enviarBoss(); } });
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ chat.classList.remove("on"); modal.classList.remove("on"); } });
-
-// heatmap "onde o dinheiro queimou": dia (linha) × hora (coluna), cor pela intensidade
-const CORGASTO=["#111a26","#3a4657","#9399b2","#eb6e6e"]; // sem gasto · baixo · médio · alto
-function faixaGasto(v,pico){
-  if(v<=0) return 0;
-  if(pico<=0) return 1;
-  const r=v/pico;
-  return r>0.66?3:r>0.33?2:1;
-}
-function mapaGasto(g){
-  const sec=document.getElementById("gsec"), box=document.getElementById("mapa");
-  if(!g||!g.total){ sec.style.display="none"; box.innerHTML=""; return; }
-  sec.style.display="block";
-  const dia=s=>{const [,m,d]=s.split("-");return d+"/"+m;};
-  let linhas="";
-  for(const L of g.linhas){
-    let cels="";
-    for(let h=0;h<24;h++){
-      const v=L.horas[h], f=faixaGasto(v,g.pico);
-      const t=v>0?dia(L.data)+" "+String(h).padStart(2,"0")+"h · US$ "+v.toFixed(2):"";
-      cels+='<td class="cel" style="background:'+CORGASTO[f]+'" title="'+t+'"></td>';
-    }
-    linhas+='<tr><td class="dia">'+dia(L.data)+'</td>'+cels+
-      '<td class="tot">'+(L.total>0?dinheiro(L.total):'')+'</td></tr>';
-  }
-  // eixo de horas (00, 06, 12, 18)
-  let eixo='<tr><td></td>';
-  for(let h=0;h<24;h++) eixo+='<td class="eixo">'+(h%6===0?String(h).padStart(2,"0"):"")+'</td>';
-  eixo+='<td></td></tr>';
-  const lim1=(g.pico/3), lim2=(g.pico*2/3);
-  box.innerHTML='<table>'+linhas+eixo+'</table>'+
-    '<div class="legenda">'+
-      '<span><i style="background:'+CORGASTO[0]+'"></i>sem gasto</span>'+
-      '<span><i style="background:'+CORGASTO[1]+'"></i>até '+dinheiro(lim1)+'/h</span>'+
-      '<span><i style="background:'+CORGASTO[2]+'"></i>'+dinheiro(lim1)+' a '+dinheiro(lim2)+'</span>'+
-      '<span><i style="background:'+CORGASTO[3]+'"></i>daí pra cima</span>'+
-      '<span style="margin-left:auto;color:var(--verde);font-weight:700">total 14 dias: '+dinheiro(g.total)+'</span>'+
-    '</div>';
-}
-
-// Ao vivo por SSE, com DUAS redes de segurança pra nunca congelar:
-//  1) se o SSE cai (ex.: servidor reiniciou), RECONECTA sozinho depois de 2s;
-//  2) um cão-de-guarda: se ficar 5s sem receber nada, busca por poll — cobre o caso do
-//     SSE morto silencioso (foi o que travou a aba do dono quando reiniciei o servidor).
-let ultimoUpdate=0;   // 0 = a página pinta NA HORA por poll, não espera o 1º evento do SSE
-async function puxar(){ try{ render(await (await fetch("/retrato")).json()); ultimoUpdate=Date.now(); }catch{} }
-function conectarSSE(){
-  try{
-    const es=new EventSource("/eventos");
-    es.onmessage=e=>{ ultimoUpdate=Date.now(); try{ render(JSON.parse(e.data)); }catch{} };
-    es.onerror=()=>{ try{es.close()}catch{}; setTimeout(conectarSSE,2000); };
-  }catch{ /* o cão-de-guarda abaixo assume por poll */ }
-}
-puxar();          // 1ª pintura imediata — as tarefas aparecem já, mesmo se o SSE demorar/cair
-conectarSSE();
-setInterval(()=>{ if(Date.now()-ultimoUpdate>=4000) puxar(); },2000); // cão-de-guarda: SSE mudo → poll
-</script></body></html>`;
-
-/**
- * Chat do Boss em PÁGINA INTEIRA (rota GET /chat) — pra abrir numa aba própria, janela cheia.
- * Reusa os MESMOS endpoints do servidor (/boss/historico, /boss/chat, /boss/anexo) — só a tela
- * é nova, então não há lógica de Boss duplicada. É o chefe-dos-chefes (roteia por projeto pelo
- * que você disser; sem abas aqui, não manda dica).
- */
-// PÁGINA INTEIRA (/fluxo): o grafo do PROCESSO no topo + as TAREFAS fluindo por estágio ao vivo.
-// Autossuficiente (lê só /retrato, sem endpoint novo). Não toca no grid — página à parte.
+// tabs
+document.getElementById("tabs").addEventListener("click",function(e){var t=e.target.closest(".tab");if(t)setAba(t.dataset.a)});
+setInterval(function(){var r=document.getElementById("relogio");if(!r||!R.agentes)return;/* mantém "há X" fresco */ if(aba==="agentes"&&!inputFocado())renderAba()},15000);
+conectar();
+</script>
+</body></html>`;
 const FLUXO_PAGE = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Fluxo da Obra</title>
 <style>
