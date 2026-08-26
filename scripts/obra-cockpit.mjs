@@ -18,7 +18,7 @@
  */
 import { createServer } from "http";
 import { spawn, execFileSync, execFile } from "child_process";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, readdirSync, statSync } from "fs";
 import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
@@ -273,6 +273,89 @@ function lerTarefas() {
   return [...doLanc, ...doReg].sort((x, y) => String(y.aberto_em).localeCompare(String(x.aberto_em)));
 }
 
+// ================== AUTO-DESCOBERTA (a virada da torre de controle) ==================
+// Em vez de conhecer só o que ELE mesmo despachou, o cockpit espelha o estado do herdr:
+// TODO pane rodando um agente, em QUALQUER workspace (inclusive o que você abriu na mão).
+// `herdr agent list` dá status/projeto/pane/título-ao-vivo/UUID; o UUID linka no
+// ~/.claude/projects/<slug>/<uuid>.jsonl, de onde sai o MODELO, os tokens e a última atividade.
+const HOME = process.env.HOME || "/home/saturno";
+const PROJETOS_CLAUDE = resolve(HOME, ".claude", "projects");
+const sessaoCache = new Map(); // uuid -> { mtime, model, out, cacheRead, lastTs } (recalcula só quando o arquivo muda)
+function enriquecerSessao(cwd, uuid) {
+  if (!cwd || !uuid) return null;
+  const slug = cwd.replace(/[^A-Za-z0-9]/g, "-"); // igual ao slug do claude p/ ~/.claude/projects
+  const arq = resolve(PROJETOS_CLAUDE, slug, uuid + ".jsonl");
+  let st; try { st = statSync(arq); } catch { return sessaoCache.get(uuid) || null; }
+  const cache = sessaoCache.get(uuid);
+  if (cache && cache.mtime === st.mtimeMs) return cache; // nada mudou: reusa (evita reparsear MBs a cada tick)
+  let model = null, out = 0, cacheRead = 0, lastTs = null;
+  try {
+    for (const ln of readFileSync(arq, "utf8").split("\n")) {
+      if (!ln) continue;
+      let o; try { o = JSON.parse(ln); } catch { continue; }
+      if (o.timestamp) lastTs = o.timestamp;
+      const m = o.message;
+      if (m && m.model) model = m.model;
+      const u = m && m.usage;
+      if (u) { out += u.output_tokens || 0; cacheRead += u.cache_read_input_tokens || 0; }
+    }
+  } catch { return cache || null; }
+  const dado = { mtime: st.mtimeMs, model, out, cacheRead, lastTs };
+  sessaoCache.set(uuid, dado);
+  return dado;
+}
+
+let agentesCache = [];
+let agentesRodando = false;
+function descobrirAgentes() {
+  if (agentesRodando) return; agentesRodando = true;
+  const cp = spawn("herdr", ["agent", "list"], { env: process.env });
+  let out = "";
+  cp.stdout.on("data", (d) => { out += d; });
+  cp.on("close", () => {
+    agentesRodando = false;
+    let lista;
+    try { lista = ((JSON.parse(out).result) || {}).agents || []; } catch { return; /* herdr fora do ar: mantém o último */ }
+    // o registro da obra dá o PAPEL (engenheiro/qa/revisor) e o nome de quem foi DESPACHADO pela torre
+    let reg = {};
+    try { reg = (JSON.parse(readFileSync(resolve(RAIZ, ".herdr-obra.json"), "utf8")).agentes) || {}; } catch {}
+    const porPane = {};
+    for (const [nome, a] of Object.entries(reg)) if (a && a.pane) porPane[a.pane] = { nome, papel: a.papel || null };
+    agentesCache = lista.map((a) => {
+      const cwd = a.cwd || a.foreground_cwd || "";
+      const uuid = a.agent_session && a.agent_session.value;
+      const s = enriquecerSessao(cwd, uuid);
+      const desp = porPane[a.pane_id] || null;
+      return {
+        pane: a.pane_id, workspace: a.workspace_id, casa: a.agent || "claude",
+        projeto: cwd ? cwd.split("/").pop() : "?", cwd,
+        status: a.agent_status || "unknown", focado: !!a.focused,
+        titulo: a.terminal_title_stripped || "",
+        modelo: (s && s.model) || null,
+        out: (s && s.out) || 0, cacheRead: (s && s.cacheRead) || 0,
+        ultima: (s && s.lastTs) || null,
+        papel: desp ? desp.papel : null, despachado: !!desp, nome: desp ? desp.nome : null,
+      };
+    }).sort((x, y) => {
+      const rank = (v) => (v.status === "working" ? 0 : v.status === "idle" ? 1 : 2);
+      return rank(x) - rank(y) || String(y.ultima || "").localeCompare(String(x.ultima || ""));
+    });
+  });
+  cp.on("error", () => { agentesRodando = false; });
+}
+setInterval(descobrirAgentes, 4000);
+try { descobrirAgentes(); } catch { /* ok */ }
+
+// falar/ler direto num pane (agente auto-descoberto, não só os despachados pela obra)
+function herdrCmd(args) {
+  return new Promise((ok) => {
+    const cp = spawn("herdr", args, { env: process.env });
+    let out = ""; cp.stdout.on("data", (d) => { out += d; }); cp.stderr.on("data", (d) => { out += d; });
+    cp.on("close", (code) => ok({ code, out }));
+    cp.on("error", (e) => ok({ code: 1, out: String(e.message || e) }));
+  });
+}
+
 // ---- status do hardware do saturno (a máquina onde o cockpit roda) ----
 // Lê /proc (CPU/RAM, instantâneo) e nvidia-smi (GPU, async). Cache de ~3s pra não spammar.
 let maquinaCache = null;
@@ -321,6 +404,7 @@ function retrato() {
     maquina: maquinaCache,
     diretos: diretosVivos(),
     tarefas: lerTarefas(),
+    agentes: agentesCache, // TODOS os agentes vivos do herdr (auto-descobertos), não só os despachados
     em: new Date().toISOString(),
   };
 }
@@ -1811,6 +1895,28 @@ createServer(async (req, res) => {
       if (!nome) return json(400, { erro: "faltou nome" });
       const r = await rodarObra(["ler", nome, "30"]);
       return json(200, { texto: r.out });
+    } catch (e) { return json(400, { erro: e.message }); }
+  }
+  // Auto-descoberta: falar direto com QUALQUER agente do herdr (por pane), despachado ou não
+  if (req.method === "POST" && req.url === "/agente/falar") {
+    try {
+      const b = await lerCorpo(req);
+      const pane = String(b.pane || "").trim();
+      const texto = String(b.texto || "").trim();
+      if (!pane || !texto) return json(400, { erro: "faltou pane ou texto" });
+      if (texto.length > 4000) return json(400, { erro: "texto grande demais" });
+      const r = await herdrCmd(["agent", "prompt", pane, texto]);
+      if (r.code !== 0) return json(502, { erro: "não consegui falar com o agente", detalhe: r.out.slice(0, 400) });
+      return json(200, { ok: true });
+    } catch (e) { return json(400, { erro: e.message }); }
+  }
+  // Auto-descoberta: lê a saída recente de um pane (texto renderizado do terminal)
+  if (req.method === "GET" && req.url.startsWith("/agente/saida")) {
+    try {
+      const pane = String(new URL(req.url, "http://x").searchParams.get("pane") || "").trim();
+      if (!pane) return json(400, { erro: "faltou pane" });
+      const r = await herdrCmd(["agent", "read", pane, "--source", "recent-unwrapped", "--lines", "40"]);
+      return json(200, { texto: String(r.out || "").slice(-6000) });
     } catch (e) { return json(400, { erro: e.message }); }
   }
   // Torre: encerra uma tarefa (remove a cópia e o pane)
