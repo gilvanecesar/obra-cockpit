@@ -827,7 +827,7 @@ iframe.fluxo{width:100%;height:calc(100vh - 130px);border:1px solid var(--bd);bo
 <main id="view"></main>
 <div class="toast" id="toast"></div>
 <script>
-var R={}, aba="agentes", abertos=new Set(), saidas={};
+var R={}, aba="agentes", abertos=new Set(), saidas={}, _sig="";
 var PROJS_CONHECIDOS=["querofretes-ofc","TMS","torre","agb-projetos","obra-cockpit"];
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function tempo(iso){if(!iso)return"";var s=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(s<0)s=0;if(s<60)return"há "+s+"s";if(s<3600)return"há "+Math.floor(s/60)+"min";if(s<86400)return"há "+Math.floor(s/3600)+"h";return"há "+Math.floor(s/86400)+"d"}
@@ -853,14 +853,22 @@ function pintar(){
   var g=R.gasto&&R.gasto.total!=null?("US$ "+Number(R.gasto.total).toFixed(2)):"";
   document.getElementById("custo").innerHTML=g?("obra "+g):"";
   if(inputFocado())return; // não repinta enquanto você digita
+  // só repinta quando algo REALMENTE mudou — senão a rolagem manual do card é puxada de volta a cada tick
+  var sig=aba+"|"+JSON.stringify(ag.map(function(a){return [a.pane,a.status,a.titulo,a.out,a.ultima,a.focado]}))
+    +"|"+Array.from(abertos).join(",")
+    +"|"+Array.from(abertos).map(function(p){return (saidas[p]||"").length}).join(",");
+  if(sig===_sig)return;
+  _sig=sig;
   renderAba();
 }
 function renderAba(){
   var v=document.getElementById("view");
-  if(aba==="agentes")v.innerHTML=htmlAgentes();
+  if(aba==="agentes"){v.innerHTML=htmlAgentes();rolarSaidas();}
   else if(aba==="fluxo")v.innerHTML='<iframe class="fluxo" src="/fluxo"></iframe>';
   else v.innerHTML=htmlSistema();
 }
+// caixa de saída do card começa no FIM (o mais recente), como um terminal
+function rolarSaidas(){var els=document.querySelectorAll(".saida");for(var i=0;i<els.length;i++)els[i].scrollTop=els[i].scrollHeight;}
 function setAba(a){aba=a;abertos.clear();
   var ts=document.querySelectorAll("#tabs .tab");for(var i=0;i<ts.length;i++)ts[i].className="tab"+(ts[i].dataset.a===a?" on":"");
   renderAba();
