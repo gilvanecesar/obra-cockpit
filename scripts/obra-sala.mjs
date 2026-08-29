@@ -57,7 +57,8 @@ function banner(pane, titulo, cor, sub) {
   try { h("pane", "run", pane, "bash", "-lc", cmd); } catch {}
 }
 
-const QF = "/Users/gilvanecesar/Documents/DEV/querofretes-ofc";
+// Repositório padrão da sala: o que contém estes scripts (nada de caminho de máquina).
+const QF = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function tabsObra() {
   const tabs = h("tab", "list")?.tabs || [];
