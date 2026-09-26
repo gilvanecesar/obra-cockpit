@@ -132,7 +132,18 @@ export const RAIZ_DEV = DEV;
  */
 export function conflitoDeProjeto(objetivo, slugEscolhido) {
   const txt = semAcento(objetivo);
-  const conta = (p) => p.palavras.reduce((n, w) => n + (txt.includes(semAcento(w)) ? 1 : 0), 0);
+  // Match at a word start, preserving intentional stems such as "fotovoltaic".
+  // Substrings inside unrelated words ("cte" in "caracteres") are not evidence.
+  const casa = (w) => {
+    const chave = semAcento(w);
+    let pos = txt.indexOf(chave);
+    while (pos !== -1) {
+      if (pos === 0 || !/[\p{L}\p{N}_]/u.test(txt[pos - 1])) return true;
+      pos = txt.indexOf(chave, pos + 1);
+    }
+    return false;
+  };
+  const conta = (p) => p.palavras.reduce((n, w) => n + (casa(w) ? 1 : 0), 0);
   const escolhido = acharProjeto(slugEscolhido);
   if (!escolhido) return null;
   const noEscolhido = conta(escolhido);
@@ -147,7 +158,7 @@ export function conflitoDeProjeto(objetivo, slugEscolhido) {
     return {
       sugerido: melhor.p.slug,
       sugeridoNome: melhor.p.nome,
-      motivo: `o texto fala de "${melhor.p.palavras.find((w) => txt.includes(semAcento(w)))}", que é de ${melhor.p.nome}, não de ${escolhido.nome}`,
+      motivo: `o texto fala de "${melhor.p.palavras.find(casa)}", que é de ${melhor.p.nome}, não de ${escolhido.nome}`,
     };
   }
   return null;
